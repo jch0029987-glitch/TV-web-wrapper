@@ -191,7 +191,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun downloadAndInstallApk(url: String) {
         try {
-            Toast.init
             Toast.makeText(this, "Starting download...", Toast.LENGTH_SHORT).show()
             
             val destination = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk")
