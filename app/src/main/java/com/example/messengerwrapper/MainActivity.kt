@@ -1,9 +1,15 @@
 package com.example.messengerwrapper
 
 import android.app.DownloadManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.database.Cursor
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.StrictMode
 import android.view.KeyEvent
 import android.webkit.WebSettings
@@ -12,7 +18,9 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import org.json.JSONObject
+import java.io.File
 import java.net.URL
 import kotlin.concurrent.thread
 
@@ -21,8 +29,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var btnFacebook: Button
     private lateinit var btnMessenger: Button
-    private val repoOwner = "jch0029987-glitch"
+    private val repoOwner = "YOUR_GITHUB_USERNAME"
     private val repoName = "TV-web-wrapper"
+    private var downloadId: Long = -1L
+
+    private val onDownloadComplete = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
+            if (downloadId == id) {
+                installDownloadedApk()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,16 +63,22 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = WebViewClient()
         webView.loadUrl("https://www.facebook.com")
 
-        // Button click handlers for switching platforms
-        btnFacebook.setOnClickListener {
-            webView.loadUrl("https://www.facebook.com")
-        }
+        btnFacebook.setOnClickListener { webView.loadUrl("https://www.facebook.com") }
+        btnMessenger.setOnClickListener { webView.loadUrl("https://www.facebook.com/messages") }
 
-        btnMessenger.setOnClickListener {
-            webView.loadUrl("https://www.facebook.com/messages")
+        // Register receiver for when the update file download completes
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
         }
 
         checkForUpdates()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        unregisterReceiver(onDownloadComplete)
     }
 
     private fun checkForUpdates() {
@@ -80,8 +104,8 @@ class MainActivity : AppCompatActivity() {
     private fun showUpdateDialog(apkUrl: String, newVersion: String) {
         AlertDialog.Builder(this)
             .setTitle("Update Available")
-            .setMessage("Version $newVersion is available. Would you like to download and install it?")
-            .setPositiveButton("Update") { _, _ ->
+            .setMessage("Version $newVersion is available. The app will update automatically.")
+            .setPositiveButton("Update Now") { _, _ ->
                 downloadAndInstallApk(apkUrl)
             }
             .setNegativeButton("Later", null)
@@ -89,19 +113,34 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun downloadAndInstallApk(url: String) {
+        val destination = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk")
+        if (destination.exists()) destination.delete()
+
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle("App Update")
-            .setDescription("Downloading new version...")
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, "app-update.apk")
+            .setDescription("Downloading update...")
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+            .setDestinationUri(Uri.fromFile(destination))
 
         val manager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        manager.enqueue(request)
+        downloadId = manager.enqueue(request)
+    }
+
+    private fun installDownloadedApk() {
+        val file = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk")
+        if (!file.exists()) return
+
+        val apkUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(apkUri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivity(intent)
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (::webView.isInitialized) {
-            // Allow typing keys to pass through if focus is inside WebView elements
             if (event?.isPrintingKey == true || 
                 keyCode == KeyEvent.KEYCODE_SPACE || 
                 keyCode == KeyEvent.KEYCODE_ENTER || 
