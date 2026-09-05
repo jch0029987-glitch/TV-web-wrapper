@@ -54,8 +54,8 @@
 
     </LinearLayout>
 
-    <!-- WebView Content Area -->
-    <WebView
+    <!-- Custom Interactive WebView Fallback Layer -->
+    <com.example.messengerwrapper.InteractiveWebView
         android:id="@+id/webView"
         android:layout_width="0dp"
         android:layout_height="match_parent"
