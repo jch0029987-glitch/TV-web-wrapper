@@ -62,14 +62,20 @@ class MainActivity : AppCompatActivity() {
         webSettings.useWideViewPort = true
         webSettings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
-        // Ensure login sessions and cookies persist across app restarts
+        // Persistent login sessions via CookieManager
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             cookieManager.setAcceptThirdPartyCookies(webView, true)
         }
 
-        webView.webViewClient = WebViewClient()
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                injectVirtualCursor()
+            }
+        }
+
         webView.loadUrl("https://www.facebook.com")
 
         btnFacebook.setOnClickListener { webView.loadUrl("https://www.facebook.com") }
@@ -90,6 +96,56 @@ class MainActivity : AppCompatActivity() {
         CookieManager.getInstance().flush()
     }
 
+    private fun injectVirtualCursor() {
+        val cursorScript = """
+            (function() {
+                if (document.getElementById('tv-virtual-cursor')) return;
+                
+                const cursor = document.createElement('div');
+                cursor.id = 'tv-virtual-cursor';
+                cursor.style.position = 'fixed';
+                cursor.style.width = '20px';
+                cursor.style.height = '20px';
+                cursor.style.borderRadius = '50%';
+                cursor.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
+                cursor.style.border = '2px solid white';
+                cursor.style.zIndex = '999999';
+                cursor.style.pointerEvents = 'none';
+                cursor.style.transition = 'transform 0.05s linear';
+                cursor.style.left = '50vw';
+                cursor.style.top = '50vh';
+                document.body.appendChild(cursor);
+
+                window.moveCursor = function(dx, dy) {
+                    const rect = cursor.getBoundingClientRect();
+                    let x = rect.left + dx;
+                    let y = rect.top + dy;
+                    
+                    x = Math.max(0, Math.min(window.innerWidth - 20, x));
+                    y = Math.max(0, Math.min(window.innerHeight - 20, y));
+                    
+                    cursor.style.left = x + 'px';
+                    cursor.style.top = y + 'px';
+                };
+
+                window.clickCursor = function() {
+                    const rect = cursor.getBoundingClientRect();
+                    const x = rect.left + 10;
+                    const y = rect.top + 10;
+                    
+                    const target = document.elementFromPoint(x, y);
+                    if (target) {
+                        target.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: x, clientY: y }));
+                        target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: x, clientY: y }));
+                        target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: x, clientY: y }));
+                        target.click();
+                    }
+                };
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(cursorScript, null)
+    }
+
     private fun checkForUpdates() {
         thread {
             try {
@@ -102,11 +158,7 @@ class MainActivity : AppCompatActivity() {
                 val localVersionCode = packageManager.getPackageInfo(packageName, 0).longVersionCode
 
                 runOnUiThread {
-                    Toast.makeText(
-                        this,
-                        "Local: $localVersionCode | Remote: $remoteVersionCode",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Toast.makeText(this, "Local: $localVersionCode | Remote: $remoteVersionCode", Toast.LENGTH_LONG).show()
                 }
 
                 if (remoteVersionCode > localVersionCode) {
@@ -116,11 +168,7 @@ class MainActivity : AppCompatActivity() {
                 e.printStackTrace()
                 val errorMsg = e.message ?: "Unknown error"
                 runOnUiThread {
-                    Toast.makeText(
-                        this,
-                        "Update Error: $errorMsg",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Toast.makeText(this, "Update Error: $errorMsg", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -130,9 +178,7 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("Update Available")
             .setMessage("Version $newVersion is available. The app will update automatically.")
-            .setPositiveButton("Update Now") { _, _ ->
-                downloadAndInstallApk(apkUrl)
-            }
+            .setPositiveButton("Update Now") { _, _ -> downloadAndInstallApk(apkUrl) }
             .setNegativeButton("Later", null)
             .show()
     }
@@ -166,25 +212,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (::webView.isInitialized) {
-            if (event?.isPrintingKey == true || 
-                keyCode == KeyEvent.KEYCODE_SPACE || 
-                keyCode == KeyEvent.KEYCODE_ENTER || 
-                keyCode == KeyEvent.KEYCODE_DEL) {
+            if (event?.isPrintingKey == true || keyCode == KeyEvent.KEYCODE_DEL) {
                 return super.onKeyDown(keyCode, event)
             }
 
+            val step = 30
             when (keyCode) {
-                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
-                KeyEvent.KEYCODE_MEDIA_PLAY,
-                KeyEvent.KEYCODE_MEDIA_PAUSE,
-                KeyEvent.KEYCODE_MEDIA_NEXT,
-                KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
-                    return super.onKeyDown(keyCode, event)
-                }
-                KeyEvent.KEYCODE_DPAD_DOWN -> { webView.scrollBy(0, 100); return true }
-                KeyEvent.KEYCODE_DPAD_UP -> { webView.scrollBy(0, -100); return true }
-                KeyEvent.KEYCODE_DPAD_LEFT -> { webView.scrollBy(-100, 0); return true }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> { webView.scrollBy(100, 0); return true }
+                KeyEvent.KEYCODE_DPAD_DOWN -> { webView.evaluateJavascript("window.moveCursor(0, $step);", null); return true }
+                KeyEvent.KEYCODE_DPAD_UP -> { webView.evaluateJavascript("window.moveCursor(0, -$step);", null); return true }
+                KeyEvent.KEYCODE_DPAD_LEFT -> { webView.evaluateJavascript("window.moveCursor(-$step, 0);", null); return true }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> { webView.evaluateJavascript("window.moveCursor($step, 0);", null); return true }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { webView.evaluateJavascript("window.clickCursor();", null); return true }
             }
         }
         return super.onKeyDown(keyCode, event)
