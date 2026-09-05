@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.os.StrictMode
 import android.view.KeyEvent
+import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -59,8 +60,14 @@ class MainActivity : AppCompatActivity() {
         webSettings.databaseEnabled = true
         webSettings.loadWithOverviewMode = true
         webSettings.useWideViewPort = true
-        
         webSettings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+
+        // Ensure login sessions and cookies persist across app restarts
+        val cookieManager = CookieManager.getInstance()
+        cookieManager.setAcceptCookie(true)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            cookieManager.setAcceptThirdPartyCookies(webView, true)
+        }
 
         webView.webViewClient = WebViewClient()
         webView.loadUrl("https://www.facebook.com")
@@ -80,6 +87,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(onDownloadComplete)
+        CookieManager.getInstance().flush()
     }
 
     private fun checkForUpdates() {
@@ -93,7 +101,6 @@ class MainActivity : AppCompatActivity() {
                 val apkUrl = json.getString("apkUrl")
                 val localVersionCode = packageManager.getPackageInfo(packageName, 0).longVersionCode
 
-                // Display debug Toast directly on TV screen
                 runOnUiThread {
                     Toast.makeText(
                         this,
