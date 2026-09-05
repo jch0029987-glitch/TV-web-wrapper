@@ -78,11 +78,32 @@
 
     </LinearLayout>
 
-    <!-- Custom Interactive WebView Fallback Layer -->
-    <com.example.messengerwrapper.InteractiveWebView
-        android:id="@+id/webView"
+    <!-- WebView Container with Floating Mode HUD Overlay -->
+    <FrameLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_weight="1" />
+        android:layout_weight="1">
+
+        <com.example.messengerwrapper.InteractiveWebView
+            android:id="@+id/webView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <!-- Floating Mode HUD Indicator -->
+        <TextView
+            android:id="@+id/tvModeHud"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_margin="16dp"
+            android:background="#AA000000"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="6dp"
+            android:text="Mode: Scroll"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+    </FrameLayout>
 
 </LinearLayout>
