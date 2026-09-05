@@ -32,19 +32,19 @@ class MainActivity : AppCompatActivity() {
         if (::webView.isInitialized) {
             when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    webView.pageBy(false, 100)
+                    webView.scrollBy(0, 100)
                     return true
                 }
                 KeyEvent.KEYCODE_DPAD_UP -> {
-                    webView.pageBy(false, -100)
+                    webView.scrollBy(0, -100)
                     return true
                 }
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    webView.pageBy(true, -100)
+                    webView.scrollBy(-100, 0)
                     return true
                 }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    webView.pageBy(true, 100)
+                    webView.scrollBy(100, 0)
                     return true
                 }
             }
