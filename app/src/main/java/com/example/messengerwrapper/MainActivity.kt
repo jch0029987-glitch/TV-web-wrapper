@@ -15,6 +15,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
@@ -59,7 +60,6 @@ class MainActivity : AppCompatActivity() {
         webSettings.loadWithOverviewMode = true
         webSettings.useWideViewPort = true
         
-        // Spoof User-Agent to force desktop/tablet web layout on TV
         webSettings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
         webView.webViewClient = WebViewClient()
@@ -93,11 +93,28 @@ class MainActivity : AppCompatActivity() {
                 val apkUrl = json.getString("apkUrl")
                 val localVersionCode = packageManager.getPackageInfo(packageName, 0).longVersionCode
 
+                // Display debug Toast directly on TV screen
+                runOnUiThread {
+                    Toast.makeText(
+                        this,
+                        "Local: $localVersionCode | Remote: $remoteVersionCode",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+
                 if (remoteVersionCode > localVersionCode) {
                     runOnUiThread { showUpdateDialog(apkUrl, json.getString("versionName")) }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                val errorMsg = e.message ?: "Unknown error"
+                runOnUiThread {
+                    Toast.makeText(
+                        this,
+                        "Update Error: $errorMsg",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
     }
@@ -142,7 +159,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (::webView.isInitialized) {
-            // Pass through typing keys and standard input
             if (event?.isPrintingKey == true || 
                 keyCode == KeyEvent.KEYCODE_SPACE || 
                 keyCode == KeyEvent.KEYCODE_ENTER || 
@@ -150,7 +166,6 @@ class MainActivity : AppCompatActivity() {
                 return super.onKeyDown(keyCode, event)
             }
 
-            // Handle remote control media keys for embedded videos/audio
             when (keyCode) {
                 KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
                 KeyEvent.KEYCODE_MEDIA_PLAY,
