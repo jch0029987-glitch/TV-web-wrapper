@@ -30,6 +30,15 @@
         android:layout_height="wrap_content"
         android:focusable="true"
         android:text="Launch Browser"
+        android:textSize="16sp"
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/btnSettings"
+        android:layout_width="300dp"
+        android:layout_height="wrap_content"
+        android:focusable="true"
+        android:text="Settings"
         android:textSize="16sp" />
 
 </LinearLayout>
