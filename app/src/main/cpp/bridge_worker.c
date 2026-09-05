@@ -4,21 +4,35 @@
 #include <string.h>
 #include <stdbool.h>
 
+// Expanded blocklist for comprehensive ad, analytics, social pixels, and telemetry trackers
 static const char *tracker_blocklist[] = {
     "googlesyndication.com",
     "doubleclick.net",
     "google-analytics.com",
+    "googletagmanager.com",
+    "googleadservices.com",
     "facebook.com/tr/",
+    "connect.facebook.net",
     "ads.twitter.com",
     "analytics.twitter.com",
     "scorecardresearch.com",
     "telemetry",
     "crashlytics",
+    "amazon-adsystem.com",
+    "adnxs.com",
+    "criteo.com",
+    "hotjar.com",
+    "mixpanel.com",
+    "segment.io",
+    "quantserve.com",
+    "pubmatic.com",
+    "rubiconproject.com",
     NULL
 };
 
-bool is_tracker_domain(const char *request_headers) {
-    if (!request_headers) return false;
+// Hardware Optimization: Inline lookup with branch prediction hints for low-overhead filtering
+static inline bool is_tracker_domain(const char *request_headers) {
+    if (__builtin_expect(!request_headers, 0)) return false;
     
     for (int i = 0; tracker_blocklist[i] != NULL; i++) {
         if (strstr(request_headers, tracker_blocklist[i]) != NULL) {
@@ -28,8 +42,9 @@ bool is_tracker_domain(const char *request_headers) {
     return false;
 }
 
+// Memory Optimization: Zero dynamic allocations (no malloc/free) to prevent heap fragmentation on low-RAM TV hardware
 void bridge_worker(const char *payload, char *response_out, size_t max_len) {
-    if (!payload || !response_out) {
+    if (__builtin_expect(!payload || !response_out, 0)) {
         return;
     }
 
@@ -59,6 +74,7 @@ Java_com_example_messengerwrapper_NativeBridge_nativeBridgeWorker(
     jobject thiz,
     jstring payload_jstr) {
     
+    // Memory Optimization: Use stack buffers or direct string operations where possible
     const char *payload = (*env)->GetStringUTFChars(env, payload_jstr, 0);
     char response[512];
     
