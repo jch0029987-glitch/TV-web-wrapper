@@ -12,10 +12,17 @@ class StartupActivity : AppCompatActivity() {
         setContentView(R.layout.activity_startup)
 
         val btnLaunchBrowser = findViewById<Button>(R.id.btnLaunchBrowser)
+        val btnSettings = findViewById<Button>(R.id.btnSettings)
+        
         btnLaunchBrowser.requestFocus()
 
         btnLaunchBrowser.setOnClickListener {
             val intent = Intent(this, MainActivity::class.java)
+            startActivity(intent)
+        }
+
+        btnSettings.setOnClickListener {
+            val intent = Intent(this, SettingsActivity::class.java)
             startActivity(intent)
         }
     }
