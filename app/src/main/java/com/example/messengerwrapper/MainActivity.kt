@@ -34,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var btnFacebook: Button
     private lateinit var btnMessenger: Button
+    private lateinit var btnX: Button
     private val repoOwner = "jch0029987-glitch"
     private val repoName = "TV-web-wrapper"
     private var downloadId: Long = -1L
@@ -57,6 +58,7 @@ class MainActivity : AppCompatActivity() {
         webView = findViewById(R.id.webView)
         btnFacebook = findViewById(R.id.btnFacebook)
         btnMessenger = findViewById(R.id.btnMessenger)
+        btnX = findViewById(R.id.btnX)
 
         val webSettings: WebSettings = webView.settings
         webSettings.javaScriptEnabled = true
@@ -83,6 +85,7 @@ class MainActivity : AppCompatActivity() {
 
         btnFacebook.setOnClickListener { webView.loadUrl("https://www.facebook.com") }
         btnMessenger.setOnClickListener { webView.loadUrl("https://www.facebook.com/messages") }
+        btnX.setOnClickListener { webView.loadUrl("https://x.com") }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), RECEIVER_EXPORTED)
