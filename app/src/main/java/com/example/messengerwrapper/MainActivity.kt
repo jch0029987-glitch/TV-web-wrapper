@@ -12,12 +12,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.StrictMode
-import android.util.AttributeSet
 import android.view.KeyEvent
 import android.webkit.CookieManager
-import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
-import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.Toast
@@ -30,26 +27,6 @@ import org.json.JSONObject
 import java.io.File
 import java.net.URL
 import kotlin.concurrent.thread
-
-class InteractiveWebView @JvmOverloads constructor(
-    context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
-) : WebView(context, attrs, defStyleAttr) {
-    var onKeyInterceptListener: ((KeyEvent) -> Boolean)? = null
-
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (onKeyInterceptListener?.invoke(event) == true) {
-            return true
-        }
-        return super.dispatchKeyEvent(event)
-    }
-}
-
-class WebAppInterface(private val onToggle: () -> Unit) {
-    @JavascriptInterface
-    fun requestToggleMouse() {
-        onToggle()
-    }
-}
 
 class MainActivity : AppCompatActivity() {
 
@@ -86,7 +63,7 @@ class MainActivity : AppCompatActivity() {
         btnX = findViewById(R.id.btnX)
         btnSettings = findViewById(R.id.btnSettings)
 
-        val webSettings: WebSettings = webView.settings
+        val webSettings = webView.settings
         webSettings.javaScriptEnabled = true
         webSettings.domStorageEnabled = true
         webSettings.databaseEnabled = true
@@ -117,7 +94,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView?, url: String?) {
+            override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 injectVirtualCursor()
             }
