@@ -22,6 +22,13 @@ android {
         targetSdk = 34
         versionCode = (project.findProperty("versionCode") as? String)?.toInt() ?: 1
         versionName = (project.findProperty("versionName") as? String) ?: "1.0"
+
+        externalNativeBuild {
+            cmake {
+                cppFlags("")
+                abiFilters("armeabi-v7a", "arm64-v8a", "x86_64")
+            }
+        }
     }
 
     signingConfigs {
@@ -38,6 +45,13 @@ android {
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path(file("src/main/cpp/CMakeLists.txt"))
+            version = "3.22.1"
         }
     }
 
