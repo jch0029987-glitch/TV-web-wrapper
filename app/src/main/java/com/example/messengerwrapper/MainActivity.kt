@@ -36,6 +36,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnMessenger: Button
     private lateinit var btnX: Button
     private lateinit var btnSettings: Button
+    private lateinit var btnCheckUpdate: Button
     
     private val repoOwner = "jch0029987-glitch"
     private val repoName = "TV-web-wrapper"
@@ -59,14 +60,13 @@ class MainActivity : AppCompatActivity() {
         StrictMode.setThreadPolicy(policy)
 
         webView = findViewById(R.id.webView)
-        
-        // Force Hardware Acceleration for smooth GPU rendering and high-performance scrolling
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
         btnFacebook = findViewById(R.id.btnFacebook)
         btnMessenger = findViewById(R.id.btnMessenger)
         btnX = findViewById(R.id.btnX)
         btnSettings = findViewById(R.id.btnSettings)
+        btnCheckUpdate = findViewById(R.id.btnCheckUpdate)
 
         val webSettings: WebSettings = webView.settings
         webSettings.javaScriptEnabled = true
@@ -82,12 +82,10 @@ class MainActivity : AppCompatActivity() {
             cookieManager.setAcceptThirdPartyCookies(webView, true)
         }
 
-        // Setup JS Bridge Fallback
         webView.addJavascriptInterface(WebAppInterface {
             runOnUiThread { toggleMouseMode() }
         }, "AndroidBridge")
 
-        // Setup Custom WebView Key Intercept Fallback
         webView.onKeyInterceptListener = { event ->
             val mappedKey = KeyMappingHelper.getMappedKey(this)
             if (event.keyCode == mappedKey && event.action == KeyEvent.ACTION_DOWN) {
@@ -111,6 +109,10 @@ class MainActivity : AppCompatActivity() {
         btnMessenger.setOnClickListener { webView.loadUrl("https://www.facebook.com/messages") }
         btnX.setOnClickListener { webView.loadUrl("https://x.com") }
         btnSettings.setOnClickListener { showKeyMappingDialog() }
+        btnCheckUpdate.setOnClickListener {
+            Toast.makeText(this, "Checking for updates...", Toast.LENGTH_SHORT).show()
+            checkForUpdates(manualCheck = true)
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), RECEIVER_EXPORTED)
@@ -121,7 +123,7 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
         }
 
-        checkForUpdates()
+        checkForUpdates(manualCheck = false)
     }
 
     override fun onDestroy() {
@@ -214,7 +216,7 @@ class MainActivity : AppCompatActivity() {
         webView.evaluateJavascript(cursorScript, null)
     }
 
-    private fun checkForUpdates() {
+    private fun checkForUpdates(manualCheck: Boolean = false) {
         thread {
             try {
                 val jsonURL = "https://raw.githubusercontent.com/$repoOwner/$repoName/main/update.json"
@@ -222,21 +224,33 @@ class MainActivity : AppCompatActivity() {
                 val json = JSONObject(response)
                 val remoteVersionCode = json.getInt("versionCode")
                 val apkUrl = json.getString("apkUrl")
+                val versionName = json.getString("versionName")
+                val releaseNotes = json.optString("releaseNotes", "Performance improvements and bug fixes.")
+                
                 val localVersionCode = packageManager.getPackageInfo(packageName, 0).longVersionCode
 
                 if (remoteVersionCode > localVersionCode) {
-                    runOnUiThread { showUpdateDialog(apkUrl, json.getString("versionName")) }
+                    runOnUiThread { showUpdateDialog(apkUrl, versionName, releaseNotes) }
+                } else if (manualCheck) {
+                    runOnUiThread {
+                        Toast.makeText(this, "You are using the latest version.", Toast.LENGTH_SHORT).show()
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                if (manualCheck) {
+                    runOnUiThread {
+                        Toast.makeText(this, "Failed to check for updates. Check connection.", Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         }
     }
 
-    private fun showUpdateDialog(apkUrl: String, newVersion: String) {
+    private fun showUpdateDialog(apkUrl: String, newVersion: String, releaseNotes: String) {
         AlertDialog.Builder(this)
-            .setTitle("Update Available")
-            .setMessage("Version $newVersion is available. The app will update automatically.")
+            .setTitle("Update Available ($newVersion)")
+            .setMessage("Here are the changes in this version:\n\n$releaseNotes\n\nThe app will update automatically.")
             .setPositiveButton("Update Now") { _, _ -> downloadAndInstallApk(apkUrl) }
             .setNegativeButton("Later", null)
             .show()
@@ -292,7 +306,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val isSidebarFocused = btnFacebook.hasFocus() || btnMessenger.hasFocus() || btnX.hasFocus() || btnSettings.hasFocus()
+        val isSidebarFocused = btnFacebook.hasFocus() || btnMessenger.hasFocus() || btnX.hasFocus() || btnSettings.hasFocus() || btnCheckUpdate.hasFocus()
         if (!isMouseModeActive && !isSidebarFocused && event.action == KeyEvent.ACTION_DOWN) {
             val scrollStep = 150
             when (event.keyCode) {
