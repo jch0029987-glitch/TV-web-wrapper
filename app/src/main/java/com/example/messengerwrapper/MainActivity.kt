@@ -230,6 +230,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        // If a native sidebar button currently has focus, let Android handle D-pad navigation natively
+        val isSidebarFocused = btnFacebook.hasFocus() || btnMessenger.hasFocus() || btnX.hasFocus()
+        if (isSidebarFocused) {
+            return super.onKeyDown(keyCode, event)
+        }
+
         if (::webView.isInitialized) {
             if (event?.isPrintingKey == true || keyCode == KeyEvent.KEYCODE_DEL) {
                 return super.onKeyDown(keyCode, event)
@@ -248,8 +254,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onBackPressed() {
+        // If the webview can go back in history, go back; otherwise return focus to the sidebar
         if (webView.canGoBack()) {
             webView.goBack()
+        } else if (!btnFacebook.hasFocus() && !btnMessenger.hasFocus() && !btnX.hasFocus()) {
+            btnFacebook.requestFocus()
         } else {
             super.onBackPressed()
         }
