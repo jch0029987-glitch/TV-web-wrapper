@@ -1,5 +1,0 @@
-<resources>
-    <style name="Theme.AppCompat.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
-        <item name="android:windowBackground">@android:color/black</item>
-    </style>
-</resources>
