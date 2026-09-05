@@ -42,7 +42,16 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:focusable="true"
-            android:text="X" />
+            android:text="X"
+            android:layout_marginBottom="12dp" />
+
+        <Button
+            android:id="@+id/btnSettings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:focusable="true"
+            android:text="Map Button" />
+
     </LinearLayout>
 
     <!-- WebView Content Area -->
