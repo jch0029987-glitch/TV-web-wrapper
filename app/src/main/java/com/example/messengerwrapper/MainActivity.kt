@@ -1,10 +1,12 @@
 package com.example.messengerwrapper
 
+import android.Manifest
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -19,6 +21,8 @@ import android.widget.Button
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import org.json.JSONObject
 import java.io.File
@@ -62,7 +66,6 @@ class MainActivity : AppCompatActivity() {
         webSettings.useWideViewPort = true
         webSettings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
-        // Persistent login sessions via CookieManager
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -83,6 +86,9 @@ class MainActivity : AppCompatActivity() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), RECEIVER_EXPORTED)
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
         } else {
             registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
         }
@@ -184,22 +190,33 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun downloadAndInstallApk(url: String) {
-        val destination = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk")
-        if (destination.exists()) destination.delete()
+        try {
+            Toast.init
+            Toast.makeText(this, "Starting download...", Toast.LENGTH_SHORT).show()
+            
+            val destination = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk")
+            if (destination.exists()) destination.delete()
 
-        val request = DownloadManager.Request(Uri.parse(url))
-            .setTitle("App Update")
-            .setDescription("Downloading update...")
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-            .setDestinationUri(Uri.fromFile(destination))
+            val request = DownloadManager.Request(Uri.parse(url))
+                .setTitle("App Update")
+                .setDescription("Downloading update...")
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setDestinationUri(Uri.fromFile(destination))
 
-        val manager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        downloadId = manager.enqueue(request)
+            val manager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            downloadId = manager.enqueue(request)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun installDownloadedApk() {
         val file = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk")
-        if (!file.exists()) return
+        if (!file.exists()) {
+            Toast.makeText(this, "Downloaded file not found", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         val apkUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
         val intent = Intent(Intent.ACTION_VIEW).apply {
