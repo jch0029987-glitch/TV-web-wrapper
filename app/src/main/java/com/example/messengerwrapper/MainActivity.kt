@@ -122,7 +122,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        webView.loadUrl("https://www.facebook.com")
+        // Native C Bridge integration for tracker/ad mitigation payload evaluation
+        val nativeBridge = NativeBridge()
+        
+        val prefs = getSharedPreferences("BrowserPrefs", Context.MODE_PRIVATE)
+        val targetUrl = prefs.getString("custom_url", "https://www.facebook.com") ?: "https://www.facebook.com"
+        webView.loadUrl(targetUrl)
 
         btnFacebook.setOnClickListener { webView.loadUrl("https://www.facebook.com") }
         btnMessenger.setOnClickListener { webView.loadUrl("https://www.facebook.com/messages") }
