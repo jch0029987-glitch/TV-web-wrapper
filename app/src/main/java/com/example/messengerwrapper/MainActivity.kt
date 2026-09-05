@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.os.StrictMode
 import android.view.KeyEvent
+import android.view.View
 import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebViewClient
@@ -58,12 +59,16 @@ class MainActivity : AppCompatActivity() {
         StrictMode.setThreadPolicy(policy)
 
         webView = findViewById(R.id.webView)
+        
+        // Force Hardware Acceleration for smooth GPU rendering and high-performance scrolling
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+
         btnFacebook = findViewById(R.id.btnFacebook)
         btnMessenger = findViewById(R.id.btnMessenger)
         btnX = findViewById(R.id.btnX)
         btnSettings = findViewById(R.id.btnSettings)
 
-        val webSettings = webView.settings
+        val webSettings: WebSettings = webView.settings
         webSettings.javaScriptEnabled = true
         webSettings.domStorageEnabled = true
         webSettings.databaseEnabled = true
@@ -284,6 +289,17 @@ class MainActivity : AppCompatActivity() {
                 KeyEvent.KEYCODE_DPAD_LEFT -> { webView.evaluateJavascript("window.moveCursor(-$step, 0);", null); return true }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> { webView.evaluateJavascript("window.moveCursor($step, 0);", null); return true }
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { webView.evaluateJavascript("window.clickCursor();", null); return true }
+            }
+        }
+
+        val isSidebarFocused = btnFacebook.hasFocus() || btnMessenger.hasFocus() || btnX.hasFocus() || btnSettings.hasFocus()
+        if (!isMouseModeActive && !isSidebarFocused && event.action == KeyEvent.ACTION_DOWN) {
+            val scrollStep = 150
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_DPAD_DOWN -> { webView.evaluateJavascript("window.scrollBy(0, $scrollStep);", null); return true }
+                KeyEvent.KEYCODE_DPAD_UP -> { webView.evaluateJavascript("window.scrollBy(0, -$scrollStep);", null); return true }
+                KeyEvent.KEYCODE_DPAD_LEFT -> { webView.evaluateJavascript("window.scrollBy(-$scrollStep, 0);", null); return true }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> { webView.evaluateJavascript("window.scrollBy($scrollStep, 0);", null); return true }
             }
         }
 
