@@ -40,6 +40,7 @@ class MainActivity : AppCompatActivity() {
     private var downloadId: Long = -1L
 
     private val onDownloadComplete = object : BroadcastReceiver() {
+        // ... broadcast receiver code remains unchanged
         override fun onReceive(context: Context?, intent: Intent?) {
             val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
             if (downloadId == id) {
@@ -144,6 +145,7 @@ class MainActivity : AppCompatActivity() {
                     
                     const target = document.elementFromPoint(x, y);
                     if (target) {
+                        // If it's an input field, allow clicking/focusing, but prevent automatic keyboard traps if needed
                         target.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: x, clientY: y }));
                         target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: x, clientY: y }));
                         target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: x, clientY: y }));
@@ -230,7 +232,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        // If a native sidebar button currently has focus, let Android handle D-pad navigation natively
         val isSidebarFocused = btnFacebook.hasFocus() || btnMessenger.hasFocus() || btnX.hasFocus()
         if (isSidebarFocused) {
             return super.onKeyDown(keyCode, event)
@@ -241,12 +242,13 @@ class MainActivity : AppCompatActivity() {
                 return super.onKeyDown(keyCode, event)
             }
 
+            // If an input is currently active in the web view and user presses back/escape or arrows, blur it if needed
             val step = 30
             when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_DOWN -> { webView.evaluateJavascript("window.moveCursor(0, $step);", null); return true }
-                KeyEvent.KEYCODE_DPAD_UP -> { webView.evaluateJavascript("window.moveCursor(0, -$step);", null); return true }
-                KeyEvent.KEYCODE_DPAD_LEFT -> { webView.evaluateJavascript("window.moveCursor(-$step, 0);", null); return true }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> { webView.evaluateJavascript("window.moveCursor($step, 0);", null); return true }
+                KeyEvent.KEYCODE_DPAD_DOWN -> { webView.evaluateJavascript("window.moveCursor(0, $step); document.activeElement.blur();", null); return true }
+                KeyEvent.KEYCODE_DPAD_UP -> { webView.evaluateJavascript("window.moveCursor(0, -$step); document.activeElement.blur();", null); return true }
+                KeyEvent.KEYCODE_DPAD_LEFT -> { webView.evaluateJavascript("window.moveCursor(-$step, 0); document.activeElement.blur();", null); return true }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> { webView.evaluateJavascript("window.moveCursor($step, 0); document.activeElement.blur();", null); return true }
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { webView.evaluateJavascript("window.clickCursor();", null); return true }
             }
         }
@@ -254,7 +256,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onBackPressed() {
-        // If the webview can go back in history, go back; otherwise return focus to the sidebar
         if (webView.canGoBack()) {
             webView.goBack()
         } else if (!btnFacebook.hasFocus() && !btnMessenger.hasFocus() && !btnX.hasFocus()) {
