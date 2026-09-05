@@ -5,7 +5,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -29,7 +28,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var btnFacebook: Button
     private lateinit var btnMessenger: Button
-    private val repoOwner = "YOUR_GITHUB_USERNAME"
+    private val repoOwner = "jch0029987-glitch"
     private val repoName = "TV-web-wrapper"
     private var downloadId: Long = -1L
 
@@ -59,6 +58,9 @@ class MainActivity : AppCompatActivity() {
         webSettings.databaseEnabled = true
         webSettings.loadWithOverviewMode = true
         webSettings.useWideViewPort = true
+        
+        // Spoof User-Agent to force desktop/tablet web layout on TV
+        webSettings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
         webView.webViewClient = WebViewClient()
         webView.loadUrl("https://www.facebook.com")
@@ -66,7 +68,6 @@ class MainActivity : AppCompatActivity() {
         btnFacebook.setOnClickListener { webView.loadUrl("https://www.facebook.com") }
         btnMessenger.setOnClickListener { webView.loadUrl("https://www.facebook.com/messages") }
 
-        // Register receiver for when the update file download completes
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), RECEIVER_EXPORTED)
         } else {
@@ -141,6 +142,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (::webView.isInitialized) {
+            // Pass through typing keys and standard input
             if (event?.isPrintingKey == true || 
                 keyCode == KeyEvent.KEYCODE_SPACE || 
                 keyCode == KeyEvent.KEYCODE_ENTER || 
@@ -148,7 +150,15 @@ class MainActivity : AppCompatActivity() {
                 return super.onKeyDown(keyCode, event)
             }
 
+            // Handle remote control media keys for embedded videos/audio
             when (keyCode) {
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                KeyEvent.KEYCODE_MEDIA_PLAY,
+                KeyEvent.KEYCODE_MEDIA_PAUSE,
+                KeyEvent.KEYCODE_MEDIA_NEXT,
+                KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
+                    return super.onKeyDown(keyCode, event)
+                }
                 KeyEvent.KEYCODE_DPAD_DOWN -> { webView.scrollBy(0, 100); return true }
                 KeyEvent.KEYCODE_DPAD_UP -> { webView.scrollBy(0, -100); return true }
                 KeyEvent.KEYCODE_DPAD_LEFT -> { webView.scrollBy(-100, 0); return true }
