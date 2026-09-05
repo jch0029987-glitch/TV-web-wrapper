@@ -35,12 +35,20 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnFacebook: Button
     private lateinit var btnMessenger: Button
     private lateinit var btnX: Button
+    private lateinit var btnSettings: Button
+    
     private val repoOwner = "jch0029987-glitch"
     private val repoName = "TV-web-wrapper"
     private var downloadId: Long = -1L
+    private var isMouseModeActive = false
+
+    private val mouseModeReceiver = object : BroadcastReceiver() {
+        if (intent?.action == TVAccessibilityService.ACTION_TOGGLE_MOUSE_MODE) {
+            toggleMouseMode()
+        }
+    }
 
     private val onDownloadComplete = object : BroadcastReceiver() {
-        // ... broadcast receiver code remains unchanged
         override fun onReceive(context: Context?, intent: Intent?) {
             val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
             if (downloadId == id) {
@@ -60,6 +68,7 @@ class MainActivity : AppCompatActivity() {
         btnFacebook = findViewById(R.id.btnFacebook)
         btnMessenger = findViewById(R.id.btnMessenger)
         btnX = findViewById(R.id.btnX)
+        btnSettings = findViewById(R.id.btnSettings)
 
         val webSettings: WebSettings = webView.settings
         webSettings.javaScriptEnabled = true
@@ -87,13 +96,17 @@ class MainActivity : AppCompatActivity() {
         btnFacebook.setOnClickListener { webView.loadUrl("https://www.facebook.com") }
         btnMessenger.setOnClickListener { webView.loadUrl("https://www.facebook.com/messages") }
         btnX.setOnClickListener { webView.loadUrl("https://x.com") }
+        btnSettings.setOnClickListener { showKeyMappingDialog() }
 
+        val filter = IntentFilter(TVAccessibilityService.ACTION_TOGGLE_MOUSE_MODE)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(mouseModeReceiver, filter, RECEIVER_EXPORTED)
             registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), RECEIVER_EXPORTED)
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
             }
         } else {
+            registerReceiver(mouseModeReceiver, filter)
             registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
         }
 
@@ -102,8 +115,41 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        unregisterReceiver(mouseModeReceiver)
         unregisterReceiver(onDownloadComplete)
         CookieManager.getInstance().flush()
+    }
+
+    private fun toggleMouseMode() {
+        isMouseModeActive = !isMouseModeActive
+        if (isMouseModeActive) {
+            Toast.makeText(this, "Mouse Mode: ON", Toast.LENGTH_SHORT).show()
+            webView.evaluateJavascript("document.activeElement.blur(); window.setCursorVisible(true);", null)
+        } else {
+            Toast.makeText(this, "Mouse Mode: OFF (Sidebar)", Toast.LENGTH_SHORT).show()
+            webView.evaluateJavascript("window.setCursorVisible(false);", null)
+            btnFacebook.requestFocus()
+        }
+    }
+
+    private fun showKeyMappingDialog() {
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Map Custom Remote Button")
+            .setMessage("Press the remote button you want to use to toggle Mouse Mode.")
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                KeyMappingHelper.saveMappedKey(this, keyCode)
+                Toast.makeText(this, "Button mapped successfully!", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+                true
+            } else {
+                false
+            }
+        }
+        dialog.show()
     }
 
     private fun injectVirtualCursor() {
@@ -121,10 +167,15 @@ class MainActivity : AppCompatActivity() {
                 cursor.style.border = '2px solid white';
                 cursor.style.zIndex = '999999';
                 cursor.style.pointerEvents = 'none';
+                cursor.style.display = 'none';
                 cursor.style.transition = 'transform 0.05s linear';
                 cursor.style.left = '50vw';
                 cursor.style.top = '50vh';
                 document.body.appendChild(cursor);
+
+                window.setCursorVisible = function(visible) {
+                    cursor.style.display = visible ? 'block' : 'none';
+                };
 
                 window.moveCursor = function(dx, dy) {
                     const rect = cursor.getBoundingClientRect();
@@ -145,7 +196,6 @@ class MainActivity : AppCompatActivity() {
                     
                     const target = document.elementFromPoint(x, y);
                     if (target) {
-                        // If it's an input field, allow clicking/focusing, but prevent automatic keyboard traps if needed
                         target.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: x, clientY: y }));
                         target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: x, clientY: y }));
                         target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: x, clientY: y }));
@@ -163,24 +213,15 @@ class MainActivity : AppCompatActivity() {
                 val jsonURL = "https://raw.githubusercontent.com/$repoOwner/$repoName/main/update.json"
                 val response = URL(jsonURL).readText()
                 val json = JSONObject(response)
-                
                 val remoteVersionCode = json.getInt("versionCode")
                 val apkUrl = json.getString("apkUrl")
                 val localVersionCode = packageManager.getPackageInfo(packageName, 0).longVersionCode
-
-                runOnUiThread {
-                    Toast.makeText(this, "Local: $localVersionCode | Remote: $remoteVersionCode", Toast.LENGTH_LONG).show()
-                }
 
                 if (remoteVersionCode > localVersionCode) {
                     runOnUiThread { showUpdateDialog(apkUrl, json.getString("versionName")) }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                val errorMsg = e.message ?: "Unknown error"
-                runOnUiThread {
-                    Toast.makeText(this, "Update Error: $errorMsg", Toast.LENGTH_LONG).show()
-                }
             }
         }
     }
@@ -197,7 +238,6 @@ class MainActivity : AppCompatActivity() {
     private fun downloadAndInstallApk(url: String) {
         try {
             Toast.makeText(this, "Starting download...", Toast.LENGTH_SHORT).show()
-            
             val destination = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk")
             if (destination.exists()) destination.delete()
 
@@ -211,16 +251,12 @@ class MainActivity : AppCompatActivity() {
             downloadId = manager.enqueue(request)
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(this, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
     private fun installDownloadedApk() {
         val file = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk")
-        if (!file.exists()) {
-            Toast.makeText(this, "Downloaded file not found", Toast.LENGTH_SHORT).show()
-            return
-        }
+        if (!file.exists()) return
 
         val apkUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
         val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -232,36 +268,32 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        val isSidebarFocused = btnFacebook.hasFocus() || btnMessenger.hasFocus() || btnX.hasFocus()
+        if (isMouseModeActive) {
+            val step = 30
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_DOWN -> { webView.evaluateJavascript("window.moveCursor(0, $step);", null); return true }
+                KeyEvent.KEYCODE_DPAD_UP -> { webView.evaluateJavascript("window.moveCursor(0, -$step);", null); return true }
+                KeyEvent.KEYCODE_DPAD_LEFT -> { webView.evaluateJavascript("window.moveCursor(-$step, 0);", null); return true }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> { webView.evaluateJavascript("window.moveCursor($step, 0);", null); return true }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { webView.evaluateJavascript("window.clickCursor();", null); return true }
+            }
+        }
+
+        val isSidebarFocused = btnFacebook.hasFocus() || btnMessenger.hasFocus() || btnX.hasFocus() || btnSettings.hasFocus()
         if (isSidebarFocused) {
             return super.onKeyDown(keyCode, event)
         }
 
-        if (::webView.isInitialized) {
-            if (event?.isPrintingKey == true || keyCode == KeyEvent.KEYCODE_DEL) {
-                return super.onKeyDown(keyCode, event)
-            }
-
-            // If an input is currently active in the web view and user presses back/escape or arrows, blur it if needed
-            val step = 30
-            when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_DOWN -> { webView.evaluateJavascript("window.moveCursor(0, $step); document.activeElement.blur();", null); return true }
-                KeyEvent.KEYCODE_DPAD_UP -> { webView.evaluateJavascript("window.moveCursor(0, -$step); document.activeElement.blur();", null); return true }
-                KeyEvent.KEYCODE_DPAD_LEFT -> { webView.evaluateJavascript("window.moveCursor(-$step, 0); document.activeElement.blur();", null); return true }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> { webView.evaluateJavascript("window.moveCursor($step, 0); document.activeElement.blur();", null); return true }
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { webView.evaluateJavascript("window.clickCursor();", null); return true }
-            }
-        }
         return super.onKeyDown(keyCode, event)
     }
 
     override fun onBackPressed() {
-        if (webView.canGoBack()) {
+        if (isMouseModeActive) {
+            toggleMouseMode()
+        } else if (webView.canGoBack()) {
             webView.goBack()
-        } else if (!btnFacebook.hasFocus() && !btnMessenger.hasFocus() && !btnX.hasFocus()) {
-            btnFacebook.requestFocus()
         } else {
-            super.onBackPressed()
+            btnFacebook.requestFocus()
         }
     }
 }
