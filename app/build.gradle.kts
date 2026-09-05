@@ -1,6 +1,15 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
 android {
@@ -15,11 +24,23 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        create("release") {
+            val hasFile = keystorePropertiesFile.exists()
+            storeFile = file(if (hasFile) keystoreProperties.getProperty("storeFile") else "release.jks")
+            storePassword = if (hasFile) keystoreProperties.getProperty("storePassword") else System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = if (hasFile) keystoreProperties.getProperty("keyAlias") else System.getenv("KEY_ALIAS")
+            keyPassword = if (hasFile) keystoreProperties.getProperty("keyPassword") else System.getenv("KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
