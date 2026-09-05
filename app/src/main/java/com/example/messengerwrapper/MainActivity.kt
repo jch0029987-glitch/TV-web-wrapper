@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.StrictMode
+import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.webkit.CookieManager
@@ -26,6 +27,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import org.json.JSONObject
 import java.io.File
+import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.concurrent.thread
 
@@ -37,6 +39,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnX: Button
     private lateinit var btnSettings: Button
     private lateinit var btnCheckUpdate: Button
+    private lateinit var btnDesktop: Button
+    private lateinit var btnMobile: Button
     
     private val repoOwner = "jch0029987-glitch"
     private val repoName = "TV-web-wrapper"
@@ -67,6 +71,8 @@ class MainActivity : AppCompatActivity() {
         btnX = findViewById(R.id.btnX)
         btnSettings = findViewById(R.id.btnSettings)
         btnCheckUpdate = findViewById(R.id.btnCheckUpdate)
+        btnDesktop = findViewById(R.id.btnDesktop)
+        btnMobile = findViewById(R.id.btnMobile)
 
         val webSettings: WebSettings = webView.settings
         webSettings.javaScriptEnabled = true
@@ -113,6 +119,14 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Checking for updates...", Toast.LENGTH_SHORT).show()
             checkForUpdates(manualCheck = true)
         }
+        btnDesktop.setOnClickListener {
+            setDesktopMode(true)
+            Toast.makeText(this, "Switched to Desktop Mode", Toast.LENGTH_SHORT).show()
+        }
+        btnMobile.setOnClickListener {
+            setDesktopMode(false)
+            Toast.makeText(this, "Switched to Mobile Mode", Toast.LENGTH_SHORT).show()
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), RECEIVER_EXPORTED)
@@ -130,6 +144,14 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         unregisterReceiver(onDownloadComplete)
         CookieManager.getInstance().flush()
+    }
+
+    private fun setDesktopMode(enabled: Boolean) {
+        val desktopAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        val mobileAgent = "Mozilla/5.0 (Linux; Android 10; SM-T870) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+
+        webView.settings.userAgentString = if (enabled) desktopAgent else mobileAgent
+        webView.reload()
     }
 
     private fun toggleMouseMode() {
@@ -219,8 +241,15 @@ class MainActivity : AppCompatActivity() {
     private fun checkForUpdates(manualCheck: Boolean = false) {
         thread {
             try {
-                val jsonURL = "https://raw.githubusercontent.com/$repoOwner/$repoName/main/update.json"
-                val response = URL(jsonURL).readText()
+                val jsonURL = URL("https://raw.githubusercontent.com/$repoOwner/$repoName/main/update.json")
+                val connection = jsonURL.openConnection() as HttpURLConnection
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
+                connection.requestMethod = "GET"
+                
+                val response = connection.inputStream.bufferedReader().use { it.readText() }
+                Log.d("UpdateCheck", "Response: $response")
+
                 val json = JSONObject(response)
                 val remoteVersionCode = json.getInt("versionCode")
                 val apkUrl = json.getString("apkUrl")
@@ -228,6 +257,7 @@ class MainActivity : AppCompatActivity() {
                 val releaseNotes = json.optString("releaseNotes", "Performance improvements and bug fixes.")
                 
                 val localVersionCode = packageManager.getPackageInfo(packageName, 0).longVersionCode
+                Log.d("UpdateCheck", "Local: $localVersionCode | Remote: $remoteVersionCode")
 
                 if (remoteVersionCode > localVersionCode) {
                     runOnUiThread { showUpdateDialog(apkUrl, versionName, releaseNotes) }
@@ -238,9 +268,10 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                Log.e("UpdateCheck", "Error: ${e.message}")
                 if (manualCheck) {
                     runOnUiThread {
-                        Toast.makeText(this, "Failed to check for updates. Check connection.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Failed to check for updates. Check network.", Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -306,7 +337,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val isSidebarFocused = btnFacebook.hasFocus() || btnMessenger.hasFocus() || btnX.hasFocus() || btnSettings.hasFocus() || btnCheckUpdate.hasFocus()
+        val isSidebarFocused = btnFacebook.hasFocus() || 
+                               btnMessenger.hasFocus() || 
+                               btnX.hasFocus() || 
+                               btnSettings.hasFocus() || 
+                               btnCheckUpdate.hasFocus() ||
+                               btnDesktop.hasFocus() ||
+                               btnMobile.hasFocus()
+
         if (!isMouseModeActive && !isSidebarFocused && event.action == KeyEvent.ACTION_DOWN) {
             val scrollStep = 150
             when (event.keyCode) {
