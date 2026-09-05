@@ -7,6 +7,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -19,6 +22,7 @@ import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -41,11 +45,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnCheckUpdate: Button
     private lateinit var btnDesktop: Button
     private lateinit var btnMobile: Button
+    private lateinit var tvModeHud: TextView
     
     private val repoOwner = "jch0029987-glitch"
     private val repoName = "TV-web-wrapper"
     private var downloadId: Long = -1L
     private var isMouseModeActive = false
+    private lateinit var audioManager: AudioManager
 
     private val onDownloadComplete = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -63,8 +69,14 @@ class MainActivity : AppCompatActivity() {
         val policy = StrictMode.ThreadPolicy.Builder().permitAll().build()
         StrictMode.setThreadPolicy(policy)
 
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        requestAudioPlaybackFocus()
+
         webView = findViewById(R.id.webView)
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        
+        // Cache Management: Clear stale cache on startup to prevent storage bloat
+        webView.clearCache(false)
 
         btnFacebook = findViewById(R.id.btnFacebook)
         btnMessenger = findViewById(R.id.btnMessenger)
@@ -73,6 +85,7 @@ class MainActivity : AppCompatActivity() {
         btnCheckUpdate = findViewById(R.id.btnCheckUpdate)
         btnDesktop = findViewById(R.id.btnDesktop)
         btnMobile = findViewById(R.id.btnMobile)
+        tvModeHud = findViewById(R.id.tvModeHud)
 
         val webSettings: WebSettings = webView.settings
         webSettings.javaScriptEnabled = true
@@ -146,6 +159,30 @@ class MainActivity : AppCompatActivity() {
         CookieManager.getInstance().flush()
     }
 
+    private fun requestAudioPlaybackFocus() {
+        val focusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+            if (focusChange == AudioManager.AUDIOFOCUS_LOSS || focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+                webView.evaluateJavascript("document.querySelectorAll('video, audio').forEach(el => el.pause());", null)
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                .setOnAudioFocusChangeListener(focusListener)
+                .build()
+            audioManager.requestAudioFocus(focusRequest)
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+        }
+    }
+
     private fun setDesktopMode(enabled: Boolean) {
         val desktopAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         val mobileAgent = "Mozilla/5.0 (Linux; Android 10; SM-T870) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
@@ -158,9 +195,11 @@ class MainActivity : AppCompatActivity() {
         isMouseModeActive = !isMouseModeActive
         if (isMouseModeActive) {
             Toast.makeText(this, "Mouse Mode: ON", Toast.LENGTH_SHORT).show()
+            tvModeHud.text = "Mode: Mouse"
             webView.evaluateJavascript("document.activeElement.blur(); window.setCursorVisible(true);", null)
         } else {
             Toast.makeText(this, "Mouse Mode: OFF (Sidebar)", Toast.LENGTH_SHORT).show()
+            tvModeHud.text = "Mode: Scroll"
             webView.evaluateJavascript("window.setCursorVisible(false);", null)
             btnFacebook.requestFocus()
         }
