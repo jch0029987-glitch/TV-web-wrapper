@@ -14,7 +14,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.NoActionBar">
 
-        <!-- Startup activity is now the main entry point -->
+        <!-- Startup activity serves as the main entry point with Leanback support -->
         <activity
             android:name=".StartupActivity"
             android:exported="true"
@@ -27,9 +27,16 @@
             </intent-filter>
         </activity>
 
-        <!-- Main browser activity is now launched internally -->
+        <!-- Main browser activity launched internally -->
         <activity
             android:name=".MainActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|navigation" />
+
+        <!-- Dedicated settings activity for preferences and updates -->
+        <activity
+            android:name=".SettingsActivity"
             android:exported="false"
             android:screenOrientation="landscape"
             android:configChanges="orientation|screenSize|keyboard|keyboardHidden|navigation" />
