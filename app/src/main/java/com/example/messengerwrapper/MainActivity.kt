@@ -43,8 +43,10 @@ class MainActivity : AppCompatActivity() {
     private var isMouseModeActive = false
 
     private val mouseModeReceiver = object : BroadcastReceiver() {
-        if (intent?.action == TVAccessibilityService.ACTION_TOGGLE_MOUSE_MODE) {
-            toggleMouseMode()
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == TVAccessibilityService.ACTION_TOGGLE_MOUSE_MODE) {
+                toggleMouseMode()
+            }
         }
     }
 
@@ -287,6 +289,7 @@ class MainActivity : AppCompatActivity() {
         return super.onKeyDown(keyCode, event)
     }
 
+    @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (isMouseModeActive) {
             toggleMouseMode()
