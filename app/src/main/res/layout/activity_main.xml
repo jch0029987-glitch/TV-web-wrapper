@@ -50,7 +50,15 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:focusable="true"
-            android:text="Map Button" />
+            android:text="Map Button"
+            android:layout_marginBottom="12dp" />
+
+        <Button
+            android:id="@+id/btnCheckUpdate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:focusable="true"
+            android:text="Check Updates" />
 
     </LinearLayout>
 
