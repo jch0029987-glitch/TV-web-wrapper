@@ -9,6 +9,7 @@ import android.view.KeyEvent
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import org.json.JSONObject
@@ -18,8 +19,10 @@ import kotlin.concurrent.thread
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private val repoOwner = "jch0029987-glitch" // Replace with your GitHub username
-    private val repoName = "TV-web-wrapper"       // Replace with your repository name
+    private lateinit var btnFacebook: Button
+    private lateinit var btnMessenger: Button
+    private val repoOwner = "jch0029987-glitch"
+    private val repoName = "TV-web-wrapper"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,20 +32,27 @@ class MainActivity : AppCompatActivity() {
         StrictMode.setThreadPolicy(policy)
 
         webView = findViewById(R.id.webView)
-        val webSettings: WebSettings = webView.settings
+        btnFacebook = findViewById(R.id.btnFacebook)
+        btnMessenger = findViewById(R.id.btnMessenger)
 
+        val webSettings: WebSettings = webView.settings
         webSettings.javaScriptEnabled = true
         webSettings.domStorageEnabled = true
         webSettings.databaseEnabled = true
         webSettings.loadWithOverviewMode = true
         webSettings.useWideViewPort = true
 
-        webView.isFocusable = true
-        webView.isFocusableInTouchMode = true
-        webView.requestFocus()
-
         webView.webViewClient = WebViewClient()
-        webView.loadUrl("https://www.facebook.com/messages")
+        webView.loadUrl("https://www.facebook.com")
+
+        // Button click handlers for switching platforms
+        btnFacebook.setOnClickListener {
+            webView.loadUrl("https://www.facebook.com")
+        }
+
+        btnMessenger.setOnClickListener {
+            webView.loadUrl("https://www.facebook.com/messages")
+        }
 
         checkForUpdates()
     }
@@ -80,10 +90,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun downloadAndInstallApk(url: String) {
         val request = DownloadManager.Request(Uri.parse(url))
-            .setTitle("Messenger TV Update")
+            .setTitle("App Update")
             .setDescription("Downloading new version...")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, "messenger-tv-update.apk")
+            .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, "app-update.apk")
 
         val manager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         manager.enqueue(request)
@@ -91,7 +101,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (::webView.isInitialized) {
-            // Pass typing keys, space, enter, and delete directly to the WebView for typing
+            // Allow typing keys to pass through if focus is inside WebView elements
             if (event?.isPrintingKey == true || 
                 keyCode == KeyEvent.KEYCODE_SPACE || 
                 keyCode == KeyEvent.KEYCODE_ENTER || 
@@ -99,7 +109,6 @@ class MainActivity : AppCompatActivity() {
                 return super.onKeyDown(keyCode, event)
             }
 
-            // D-pad navigation scrolling fallback when not typing
             when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_DOWN -> { webView.scrollBy(0, 100); return true }
                 KeyEvent.KEYCODE_DPAD_UP -> { webView.scrollBy(0, -100); return true }
