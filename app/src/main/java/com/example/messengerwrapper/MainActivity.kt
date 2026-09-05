@@ -12,8 +12,10 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.StrictMode
+import android.util.AttributeSet
 import android.view.KeyEvent
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -29,9 +31,29 @@ import java.io.File
 import java.net.URL
 import kotlin.concurrent.thread
 
+class InteractiveWebView @JvmOverloads constructor(
+    context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
+) : WebView(context, attrs, defStyleAttr) {
+    var onKeyInterceptListener: ((KeyEvent) -> Boolean)? = null
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (onKeyInterceptListener?.invoke(event) == true) {
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+}
+
+class WebAppInterface(private val onToggle: () -> Unit) {
+    @JavascriptInterface
+    fun requestToggleMouse() {
+        onToggle()
+    }
+}
+
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var webView: WebView
+    private lateinit var webView: InteractiveWebView
     private lateinit var btnFacebook: Button
     private lateinit var btnMessenger: Button
     private lateinit var btnX: Button
@@ -41,14 +63,6 @@ class MainActivity : AppCompatActivity() {
     private val repoName = "TV-web-wrapper"
     private var downloadId: Long = -1L
     private var isMouseModeActive = false
-
-    private val mouseModeReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == TVAccessibilityService.ACTION_TOGGLE_MOUSE_MODE) {
-                toggleMouseMode()
-            }
-        }
-    }
 
     private val onDownloadComplete = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -86,6 +100,22 @@ class MainActivity : AppCompatActivity() {
             cookieManager.setAcceptThirdPartyCookies(webView, true)
         }
 
+        // Setup JS Bridge Fallback
+        webView.addJavascriptInterface(WebAppInterface {
+            runOnUiThread { toggleMouseMode() }
+        }, "AndroidBridge")
+
+        // Setup Custom WebView Key Intercept Fallback
+        webView.onKeyInterceptListener = { event ->
+            val mappedKey = KeyMappingHelper.getMappedKey(this)
+            if (event.keyCode == mappedKey && event.action == KeyEvent.ACTION_DOWN) {
+                toggleMouseMode()
+                true
+            } else {
+                false
+            }
+        }
+
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
@@ -100,15 +130,12 @@ class MainActivity : AppCompatActivity() {
         btnX.setOnClickListener { webView.loadUrl("https://x.com") }
         btnSettings.setOnClickListener { showKeyMappingDialog() }
 
-        val filter = IntentFilter(TVAccessibilityService.ACTION_TOGGLE_MOUSE_MODE)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(mouseModeReceiver, filter, RECEIVER_EXPORTED)
             registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), RECEIVER_EXPORTED)
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
             }
         } else {
-            registerReceiver(mouseModeReceiver, filter)
             registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
         }
 
@@ -117,7 +144,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(mouseModeReceiver)
         unregisterReceiver(onDownloadComplete)
         CookieManager.getInstance().flush()
     }
@@ -183,10 +209,8 @@ class MainActivity : AppCompatActivity() {
                     const rect = cursor.getBoundingClientRect();
                     let x = rect.left + dx;
                     let y = rect.top + dy;
-                    
                     x = Math.max(0, Math.min(window.innerWidth - 20, x));
                     y = Math.max(0, Math.min(window.innerHeight - 20, y));
-                    
                     cursor.style.left = x + 'px';
                     cursor.style.top = y + 'px';
                 };
@@ -195,7 +219,6 @@ class MainActivity : AppCompatActivity() {
                     const rect = cursor.getBoundingClientRect();
                     const x = rect.left + 10;
                     const y = rect.top + 10;
-                    
                     const target = document.elementFromPoint(x, y);
                     if (target) {
                         target.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: x, clientY: y }));
@@ -269,10 +292,16 @@ class MainActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (isMouseModeActive) {
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val mappedKey = KeyMappingHelper.getMappedKey(this)
+        if (event.keyCode == mappedKey && event.action == KeyEvent.ACTION_DOWN) {
+            toggleMouseMode()
+            return true
+        }
+
+        if (isMouseModeActive && event.action == KeyEvent.ACTION_DOWN) {
             val step = 30
-            when (keyCode) {
+            when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_DOWN -> { webView.evaluateJavascript("window.moveCursor(0, $step);", null); return true }
                 KeyEvent.KEYCODE_DPAD_UP -> { webView.evaluateJavascript("window.moveCursor(0, -$step);", null); return true }
                 KeyEvent.KEYCODE_DPAD_LEFT -> { webView.evaluateJavascript("window.moveCursor(-$step, 0);", null); return true }
@@ -281,12 +310,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val isSidebarFocused = btnFacebook.hasFocus() || btnMessenger.hasFocus() || btnX.hasFocus() || btnSettings.hasFocus()
-        if (isSidebarFocused) {
-            return super.onKeyDown(keyCode, event)
-        }
-
-        return super.onKeyDown(keyCode, event)
+        return super.dispatchKeyEvent(event)
     }
 
     @Deprecated("Deprecated in Java")
