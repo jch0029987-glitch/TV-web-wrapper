@@ -2,15 +2,14 @@ package com.example.messengerwrapper
 
 import android.content.Context
 import android.os.Bundle
-import android.util.Log
 import android.view.KeyEvent
 import android.widget.Button
+import android.widget.EditText
 import android.widget.Switch
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import org.json.JSONObject
-import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.concurrent.thread
@@ -29,16 +28,15 @@ class SettingsActivity : AppCompatActivity() {
         val switchAdBlock = findViewById<Switch>(R.id.switchAdBlock)
         val switchDesktopDefault = findViewById<Switch>(R.id.switchDesktopDefault)
         val btnClearCache = findViewById<Button>(R.id.btnClearCache)
+        val btnCustomUrl = findViewById<Button>(R.id.btnCustomUrl)
         val btnMapRemote = findViewById<Button>(R.id.btnMapRemote)
         val btnCheckUpdate = findViewById<Button>(R.id.btnCheckUpdate)
 
-        // Load saved preferences
         switchAdBlock.isChecked = prefs.getBoolean("ad_block_enabled", true)
         switchDesktopDefault.isChecked = prefs.getBoolean("desktop_mode_default", true)
 
         switchAdBlock.requestFocus()
 
-        // Save preferences on change
         switchAdBlock.setOnCheckedChangeListener { _, isChecked ->
             prefs.edit().putBoolean("ad_block_enabled", isChecked).apply()
             Toast.makeText(this, "Ad blocker " + if (isChecked) "enabled" else "disabled", Toast.LENGTH_SHORT).show()
@@ -51,13 +49,16 @@ class SettingsActivity : AppCompatActivity() {
 
         btnClearCache.setOnClickListener {
             try {
-                val cacheDir = cacheDir
                 cacheDir.deleteRecursively()
                 Toast.makeText(this, "Browser cache cleared successfully!", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 e.printStackTrace()
                 Toast.makeText(this, "Failed to clear cache.", Toast.LENGTH_SHORT).show()
             }
+        }
+
+        btnCustomUrl.setOnClickListener {
+            showCustomUrlDialog(prefs)
         }
 
         btnMapRemote.setOnClickListener {
@@ -68,6 +69,25 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, "Checking for updates...", Toast.LENGTH_SHORT).show()
             checkForUpdates()
         }
+    }
+
+    private fun showCustomUrlDialog(prefs: android.content.SharedPreferences) {
+        val input = EditText(this)
+        input.setText(prefs.getString("custom_url", "https://messenger.com"))
+        input.setSelection(input.text.length)
+
+        AlertDialog.Builder(this)
+            .setTitle("Set Custom Target URL")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val newUrl = input.text.toString().trim()
+                if (newUrl.isNotEmpty()) {
+                    prefs.edit().putString("custom_url", newUrl).apply()
+                    Toast.makeText(this, "URL updated successfully!", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun showKeyMappingDialog() {
@@ -103,7 +123,6 @@ class SettingsActivity : AppCompatActivity() {
                 val json = JSONObject(response)
                 val remoteVersionCode = json.getInt("versionCode")
                 val versionName = json.getString("versionName")
-                val releaseNotes = json.optString("releaseNotes", "Performance improvements.")
                 
                 val localVersionCode = packageManager.getPackageInfo(packageName, 0).longVersionCode
 
