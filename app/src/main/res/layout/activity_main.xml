@@ -2,38 +2,54 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:orientation="horizontal">
 
-    <!-- Top Navigation Bar for TV Remote -->
+    <!-- Native Sidebar Menu -->
     <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:background="#222222"
-        android:padding="8dp"
-        android:gravity="center">
+        android:layout_width="220dp"
+        android:layout_height="match_parent"
+        android:background="#121212"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="TV Wrapper"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:paddingBottom="24dp" />
 
         <Button
             android:id="@+id/btnFacebook"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:focusable="true"
             android:text="Facebook"
-            android:layout_marginEnd="16dp"
-            android:focusable="true" />
+            android:layout_marginBottom="12dp" />
 
         <Button
             android:id="@+id/btnMessenger"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:focusable="true"
             android:text="Messenger"
-            android:focusable="true" />
+            android:layout_marginBottom="12dp" />
+
+        <Button
+            android:id="@+id/btnX"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:focusable="true"
+            android:text="X" />
     </LinearLayout>
 
-    <!-- WebView Content -->
+    <!-- WebView Content Area -->
     <WebView
         android:id="@+id/webView"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
         android:layout_weight="1" />
 
 </LinearLayout>
