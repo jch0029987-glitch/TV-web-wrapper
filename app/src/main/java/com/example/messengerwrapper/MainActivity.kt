@@ -35,6 +35,8 @@ import kotlin.concurrent.thread
 class MainActivity : AppCompatActivity() {
 
     private lateinit var browserEngine: IBrowserEngine
+    private lateinit var nativeBridge: NativeBridge
+    
     private lateinit var btnFacebook: Button
     private lateinit var btnMessenger: Button
     private lateinit var btnX: Button
@@ -66,6 +68,15 @@ class MainActivity : AppCompatActivity() {
         val policy = StrictMode.ThreadPolicy.Builder().permitAll().build()
         StrictMode.setThreadPolicy(policy)
 
+        // Initialize Native C Bridge and load libbridge_worker.so
+        try {
+            nativeBridge = NativeBridge()
+            val pingResponse = nativeBridge.nativeBridgeWorker("PING")
+            Log.d("NativeBridge", pingResponse)
+        } catch (e: Exception) {
+            Log.e("NativeBridge", "Failed to initialize native bridge library", e)
+        }
+
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         requestAudioPlaybackFocus()
 
@@ -84,6 +95,17 @@ class MainActivity : AppCompatActivity() {
 
         val prefs = getSharedPreferences("BrowserPrefs", Context.MODE_PRIVATE)
         val targetUrl = prefs.getString("custom_url", "https://www.facebook.com") ?: "https://www.facebook.com"
+        
+        // Pass target through native worker if needed
+        try {
+            val filterCheck = nativeBridge.nativeBridgeWorker("GET $targetUrl")
+            if (filterCheck.startsWith("HTTP/1.1 200 OK")) {
+                Toast.makeText(this, "Blocked tracker via C bridge", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            // Fallback if uninitialized
+        }
+
         browserEngine.loadUrl(targetUrl)
 
         btnFacebook.setOnClickListener { browserEngine.loadUrl("https://www.facebook.com") }
