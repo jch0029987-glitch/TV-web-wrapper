@@ -16,6 +16,17 @@
         android:paddingBottom="24dp" />
 
     <Switch
+        android:id="@+id/switchGeckoEngine"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:focusable="true"
+        android:text="Use GeckoView Engine (Primary)"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:paddingVertical="12dp"
+        android:layout_marginBottom="8dp" />
+
+    <Switch
         android:id="@+id/switchAdBlock"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -60,13 +71,13 @@
         android:focusable="true"
         android:text="Check for Updates"
         android:layout_marginBottom="12dp" />
-        <Button
+
+    <Button
         android:id="@+id/btnCustomUrl"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:focusable="true"
         android:text="Set Custom URL"
         android:layout_marginBottom="12dp" />
-
 
 </LinearLayout>
