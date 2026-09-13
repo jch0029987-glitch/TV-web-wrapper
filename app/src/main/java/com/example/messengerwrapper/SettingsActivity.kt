@@ -6,88 +6,62 @@ import android.view.KeyEvent
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Switch
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
-import kotlin.concurrent.thread
 
 class SettingsActivity : AppCompatActivity() {
 
-    private val repoOwner = "jch0029987-glitch"
-    private val repoName = "TV-web-wrapper"
+    private lateinit var switchGecko: Switch
+    private lateinit var etCustomUrl: EditText
+    private lateinit var tvMappedKey: TextView
+    private lateinit var btnMapKey: Button
+    private lateinit var btnSave: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
 
+        switchGecko = findViewById(R.id.switchGeckoEngine)
+        etCustomUrl = findViewById(R.id.etCustomUrl)
+        tvMappedKey = findViewById(R.id.tvMappedKey)
+        btnMapKey = findViewById(R.id.btnMapKey)
+        btnSave = findViewById(R.id.btnSaveSettings)
+
         val prefs = getSharedPreferences("BrowserPrefs", Context.MODE_PRIVATE)
+        
+        // Load existing preferences
+        switchGecko.isChecked = prefs.getBoolean("use_gecko", true)
+        etCustomUrl.setText(prefs.getString("custom_url", "https://www.facebook.com"))
+        updateMappedKeyDisplay()
 
-        val switchAdBlock = findViewById<Switch>(R.id.switchAdBlock)
-        val switchDesktopDefault = findViewById<Switch>(R.id.switchDesktopDefault)
-        val btnClearCache = findViewById<Button>(R.id.btnClearCache)
-        val btnCustomUrl = findViewById<Button>(R.id.btnCustomUrl)
-        val btnMapRemote = findViewById<Button>(R.id.btnMapRemote)
-        val btnCheckUpdate = findViewById<Button>(R.id.btnCheckUpdate)
-
-        switchAdBlock.isChecked = prefs.getBoolean("ad_block_enabled", true)
-        switchDesktopDefault.isChecked = prefs.getBoolean("desktop_mode_default", true)
-
-        switchAdBlock.requestFocus()
-
-        switchAdBlock.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean("ad_block_enabled", isChecked).apply()
-            Toast.makeText(this, "Ad blocker " + if (isChecked) "enabled" else "disabled", Toast.LENGTH_SHORT).show()
-        }
-
-        switchDesktopDefault.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean("desktop_mode_default", isChecked).apply()
-            Toast.makeText(this, "Desktop default " + if (isChecked) "enabled" else "disabled", Toast.LENGTH_SHORT).show()
-        }
-
-        btnClearCache.setOnClickListener {
-            try {
-                cacheDir.deleteRecursively()
-                Toast.makeText(this, "Browser cache cleared successfully!", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                e.printStackTrace()
-                Toast.makeText(this, "Failed to clear cache.", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        btnCustomUrl.setOnClickListener {
-            showCustomUrlDialog(prefs)
-        }
-
-        btnMapRemote.setOnClickListener {
+        btnMapKey.setOnClickListener {
             showKeyMappingDialog()
         }
 
-        btnCheckUpdate.setOnClickListener {
-            Toast.makeText(this, "Checking for updates...", Toast.LENGTH_SHORT).show()
-            checkForUpdates()
+        btnSave.setOnClickListener {
+            val useGecko = switchGecko.isChecked
+            val customUrl = etCustomUrl.text.toString().trim()
+
+            prefs.edit().apply {
+                putBoolean("use_gecko", useGecko)
+                putString("custom_url", if (customUrl.isNotEmpty()) customUrl else "https://www.facebook.com")
+                apply()
+            }
+
+            Toast.makeText(
+                this,
+                "Settings saved! Restart app to apply engine changes.",
+                Toast.LENGTH_LONG
+            ).show()
+            finish()
         }
     }
 
-    private fun showCustomUrlDialog(prefs: android.content.SharedPreferences) {
-        val input = EditText(this)
-        input.setText(prefs.getString("custom_url", "https://messenger.com"))
-        input.setSelection(input.text.length)
-
-        AlertDialog.Builder(this)
-            .setTitle("Set Custom Target URL")
-            .setView(input)
-            .setPositiveButton("Save") { _, _ ->
-                val newUrl = input.text.toString().trim()
-                if (newUrl.isNotEmpty()) {
-                    prefs.edit().putString("custom_url", newUrl).apply()
-                    Toast.makeText(this, "URL updated successfully!", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+    private fun updateMappedKeyDisplay() {
+        val keyCode = KeyMappingHelper.getMappedKey(this)
+        tvMappedKey.text = "Current Mapped Button KeyCode: $keyCode"
     }
 
     private fun showKeyMappingDialog() {
@@ -100,6 +74,7 @@ class SettingsActivity : AppCompatActivity() {
         dialog.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN) {
                 KeyMappingHelper.saveMappedKey(this, keyCode)
+                updateMappedKeyDisplay()
                 Toast.makeText(this, "Button mapped successfully!", Toast.LENGTH_SHORT).show()
                 dialog.dismiss()
                 true
@@ -108,39 +83,5 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
         dialog.show()
-    }
-
-    private fun checkForUpdates() {
-        thread {
-            try {
-                val jsonURL = URL("https://raw.githubusercontent.com/$repoOwner/$repoName/main/update.json")
-                val connection = jsonURL.openConnection() as HttpURLConnection
-                connection.connectTimeout = 5000
-                connection.readTimeout = 5000
-                connection.requestMethod = "GET"
-                
-                val response = connection.inputStream.bufferedReader().use { it.readText() }
-                val json = JSONObject(response)
-                val remoteVersionCode = json.getInt("versionCode")
-                val versionName = json.getString("versionName")
-                
-                val localVersionCode = packageManager.getPackageInfo(packageName, 0).longVersionCode
-
-                if (remoteVersionCode > localVersionCode) {
-                    runOnUiThread {
-                        Toast.makeText(this, "Update available: $versionName", Toast.LENGTH_LONG).show()
-                    }
-                } else {
-                    runOnUiThread {
-                        Toast.makeText(this, "You are using the latest version.", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                runOnUiThread {
-                    Toast.makeText(this, "Failed to check for updates. Check network.", Toast.LENGTH_LONG).show()
-                }
-            }
-        }
     }
 }
