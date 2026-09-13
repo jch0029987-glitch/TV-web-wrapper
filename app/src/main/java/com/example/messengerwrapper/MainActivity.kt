@@ -370,6 +370,17 @@ class MainActivity : AppCompatActivity() {
             return true
         }
 
+        // Pass physical keyboard strokes (alphanumeric, backspace, space, enter) directly to WebView
+        val isTextEditing = (event.unicodeChar != 0 && event.action == KeyEvent.ACTION_DOWN) ||
+                            event.keyCode == KeyEvent.KEYCODE_DEL ||
+                            event.keyCode == KeyEvent.KEYCODE_ENTER ||
+                            event.keyCode == KeyEvent.KEYCODE_SPACE ||
+                            event.keyCode == KeyEvent.KEYCODE_TAB
+
+        if (isTextEditing && !isMouseModeActive) {
+            return super.dispatchKeyEvent(event)
+        }
+
         if (isMouseModeActive && event.action == KeyEvent.ACTION_DOWN) {
             val step = 30
             when (event.keyCode) {
