@@ -17,11 +17,8 @@ import android.os.Environment
 import android.os.StrictMode
 import android.util.Log
 import android.view.KeyEvent
-import android.view.View
-import android.webkit.CookieManager
-import android.webkit.WebSettings
-import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -37,7 +34,7 @@ import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var webView: InteractiveWebView
+    private lateinit var browserEngine: IBrowserEngine
     private lateinit var btnFacebook: Button
     private lateinit var btnMessenger: Button
     private lateinit var btnX: Button
@@ -72,11 +69,9 @@ class MainActivity : AppCompatActivity() {
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         requestAudioPlaybackFocus()
 
-        webView = findViewById(R.id.webView)
-        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        
-        // Cache Management: Clear stale cache on startup to prevent storage bloat
-        webView.clearCache(false)
+        val container = findViewById<FrameLayout>(R.id.webViewContainer)
+        browserEngine = initBrowserEngine(container)
+        browserEngine.clearCache()
 
         btnFacebook = findViewById(R.id.btnFacebook)
         btnMessenger = findViewById(R.id.btnMessenger)
@@ -87,62 +82,24 @@ class MainActivity : AppCompatActivity() {
         btnMobile = findViewById(R.id.btnMobile)
         tvModeHud = findViewById(R.id.tvModeHud)
 
-        val webSettings: WebSettings = webView.settings
-        webSettings.javaScriptEnabled = true
-        webSettings.domStorageEnabled = true
-        webSettings.databaseEnabled = true
-        webSettings.loadWithOverviewMode = true
-        webSettings.useWideViewPort = true
-        webSettings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-
-        val cookieManager = CookieManager.getInstance()
-        cookieManager.setAcceptCookie(true)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            cookieManager.setAcceptThirdPartyCookies(webView, true)
-        }
-
-        webView.addJavascriptInterface(WebAppInterface {
-            runOnUiThread { toggleMouseMode() }
-        }, "AndroidBridge")
-
-        webView.onKeyInterceptListener = { event ->
-            val mappedKey = KeyMappingHelper.getMappedKey(this)
-            if (event.keyCode == mappedKey && event.action == KeyEvent.ACTION_DOWN) {
-                toggleMouseMode()
-                true
-            } else {
-                false
-            }
-        }
-
-        webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
-                super.onPageFinished(view, url)
-                injectVirtualCursor()
-            }
-        }
-
-        // Native C Bridge integration for tracker/ad mitigation payload evaluation
-        val nativeBridge = NativeBridge()
-        
         val prefs = getSharedPreferences("BrowserPrefs", Context.MODE_PRIVATE)
         val targetUrl = prefs.getString("custom_url", "https://www.facebook.com") ?: "https://www.facebook.com"
-        webView.loadUrl(targetUrl)
+        browserEngine.loadUrl(targetUrl)
 
-        btnFacebook.setOnClickListener { webView.loadUrl("https://www.facebook.com") }
-        btnMessenger.setOnClickListener { webView.loadUrl("https://www.facebook.com/messages") }
-        btnX.setOnClickListener { webView.loadUrl("https://x.com") }
+        btnFacebook.setOnClickListener { browserEngine.loadUrl("https://www.facebook.com") }
+        btnMessenger.setOnClickListener { browserEngine.loadUrl("https://www.facebook.com/messages") }
+        btnX.setOnClickListener { browserEngine.loadUrl("https://x.com") }
         btnSettings.setOnClickListener { showKeyMappingDialog() }
         btnCheckUpdate.setOnClickListener {
             Toast.makeText(this, "Checking for updates...", Toast.LENGTH_SHORT).show()
             checkForUpdates(manualCheck = true)
         }
         btnDesktop.setOnClickListener {
-            setDesktopMode(true)
+            browserEngine.setDesktopMode(true)
             Toast.makeText(this, "Switched to Desktop Mode", Toast.LENGTH_SHORT).show()
         }
         btnMobile.setOnClickListener {
-            setDesktopMode(false)
+            browserEngine.setDesktopMode(false)
             Toast.makeText(this, "Switched to Mobile Mode", Toast.LENGTH_SHORT).show()
         }
 
@@ -161,13 +118,34 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(onDownloadComplete)
-        CookieManager.getInstance().flush()
+    }
+
+    private fun initBrowserEngine(container: FrameLayout): IBrowserEngine {
+        val prefs = getSharedPreferences("BrowserPrefs", Context.MODE_PRIVATE)
+        val useGecko = prefs.getBoolean("use_gecko", true)
+
+        val engine: IBrowserEngine = try {
+            if (useGecko) GeckoEngine(this) else WebViewEngine(this)
+        } catch (e: Exception) {
+            prefs.edit().putBoolean("use_gecko", false).apply()
+            Toast.makeText(this, "Gecko engine failed. Falling back to WebView.", Toast.LENGTH_LONG).show()
+            WebViewEngine(this)
+        }
+
+        container.addView(
+            engine.view, 
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, 
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        return engine
     }
 
     private fun requestAudioPlaybackFocus() {
         val focusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
             if (focusChange == AudioManager.AUDIOFOCUS_LOSS || focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-                webView.evaluateJavascript("document.querySelectorAll('video, audio').forEach(el => el.pause());", null)
+                browserEngine.evaluateJavascript("document.querySelectorAll('video, audio').forEach(el => el.pause());")
             }
         }
 
@@ -188,24 +166,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setDesktopMode(enabled: Boolean) {
-        val desktopAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        val mobileAgent = "Mozilla/5.0 (Linux; Android 10; SM-T870) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-
-        webView.settings.userAgentString = if (enabled) desktopAgent else mobileAgent
-        webView.reload()
-    }
-
     private fun toggleMouseMode() {
         isMouseModeActive = !isMouseModeActive
         if (isMouseModeActive) {
             Toast.makeText(this, "Mouse Mode: ON", Toast.LENGTH_SHORT).show()
             tvModeHud.text = "Mode: Mouse"
-            webView.evaluateJavascript("document.activeElement.blur(); window.setCursorVisible(true);", null)
+            browserEngine.evaluateJavascript("document.activeElement.blur(); window.setCursorVisible(true);")
         } else {
             Toast.makeText(this, "Mouse Mode: OFF (Sidebar)", Toast.LENGTH_SHORT).show()
             tvModeHud.text = "Mode: Scroll"
-            webView.evaluateJavascript("window.setCursorVisible(false);", null)
+            browserEngine.evaluateJavascript("window.setCursorVisible(false);")
             btnFacebook.requestFocus()
         }
     }
@@ -230,58 +200,6 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    private fun injectVirtualCursor() {
-        val cursorScript = """
-            (function() {
-                if (document.getElementById('tv-virtual-cursor')) return;
-                
-                const cursor = document.createElement('div');
-                cursor.id = 'tv-virtual-cursor';
-                cursor.style.position = 'fixed';
-                cursor.style.width = '20px';
-                cursor.style.height = '20px';
-                cursor.style.borderRadius = '50%';
-                cursor.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
-                cursor.style.border = '2px solid white';
-                cursor.style.zIndex = '999999';
-                cursor.style.pointerEvents = 'none';
-                cursor.style.display = 'none';
-                cursor.style.transition = 'transform 0.05s linear';
-                cursor.style.left = '50vw';
-                cursor.style.top = '50vh';
-                document.body.appendChild(cursor);
-
-                window.setCursorVisible = function(visible) {
-                    cursor.style.display = visible ? 'block' : 'none';
-                };
-
-                window.moveCursor = function(dx, dy) {
-                    const rect = cursor.getBoundingClientRect();
-                    let x = rect.left + dx;
-                    let y = rect.top + dy;
-                    x = Math.max(0, Math.min(window.innerWidth - 20, x));
-                    y = Math.max(0, Math.min(window.innerHeight - 20, y));
-                    cursor.style.left = x + 'px';
-                    cursor.style.top = y + 'px';
-                };
-
-                window.clickCursor = function() {
-                    const rect = cursor.getBoundingClientRect();
-                    const x = rect.left + 10;
-                    const y = rect.top + 10;
-                    const target = document.elementFromPoint(x, y);
-                    if (target) {
-                        target.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: x, clientY: y }));
-                        target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: x, clientY: y }));
-                        target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: x, clientY: y }));
-                        target.click();
-                    }
-                };
-            })();
-        """.trimIndent()
-        webView.evaluateJavascript(cursorScript, null)
-    }
-
     private fun checkForUpdates(manualCheck: Boolean = false) {
         thread {
             try {
@@ -292,8 +210,6 @@ class MainActivity : AppCompatActivity() {
                 connection.requestMethod = "GET"
                 
                 val response = connection.inputStream.bufferedReader().use { it.readText() }
-                Log.d("UpdateCheck", "Response: $response")
-
                 val json = JSONObject(response)
                 val remoteVersionCode = json.getInt("versionCode")
                 val apkUrl = json.getString("apkUrl")
@@ -301,7 +217,6 @@ class MainActivity : AppCompatActivity() {
                 val releaseNotes = json.optString("releaseNotes", "Performance improvements and bug fixes.")
                 
                 val localVersionCode = packageManager.getPackageInfo(packageName, 0).longVersionCode
-                Log.d("UpdateCheck", "Local: $localVersionCode | Remote: $remoteVersionCode")
 
                 if (remoteVersionCode > localVersionCode) {
                     runOnUiThread { showUpdateDialog(apkUrl, versionName, releaseNotes) }
@@ -312,7 +227,6 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                Log.e("UpdateCheck", "Error: ${e.message}")
                 if (manualCheck) {
                     runOnUiThread {
                         Toast.makeText(this, "Failed to check for updates. Check network.", Toast.LENGTH_LONG).show()
@@ -370,7 +284,6 @@ class MainActivity : AppCompatActivity() {
             return true
         }
 
-        // Pass physical keyboard strokes (alphanumeric, backspace, space, enter) directly to WebView
         val isTextEditing = (event.unicodeChar != 0 && event.action == KeyEvent.ACTION_DOWN) ||
                             event.keyCode == KeyEvent.KEYCODE_DEL ||
                             event.keyCode == KeyEvent.KEYCODE_ENTER ||
@@ -384,11 +297,11 @@ class MainActivity : AppCompatActivity() {
         if (isMouseModeActive && event.action == KeyEvent.ACTION_DOWN) {
             val step = 30
             when (event.keyCode) {
-                KeyEvent.KEYCODE_DPAD_DOWN -> { webView.evaluateJavascript("window.moveCursor(0, $step);", null); return true }
-                KeyEvent.KEYCODE_DPAD_UP -> { webView.evaluateJavascript("window.moveCursor(0, -$step);", null); return true }
-                KeyEvent.KEYCODE_DPAD_LEFT -> { webView.evaluateJavascript("window.moveCursor(-$step, 0);", null); return true }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> { webView.evaluateJavascript("window.moveCursor($step, 0);", null); return true }
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { webView.evaluateJavascript("window.clickCursor();", null); return true }
+                KeyEvent.KEYCODE_DPAD_DOWN -> { browserEngine.evaluateJavascript("window.moveCursor(0, $step);"); return true }
+                KeyEvent.KEYCODE_DPAD_UP -> { browserEngine.evaluateJavascript("window.moveCursor(0, -$step);"); return true }
+                KeyEvent.KEYCODE_DPAD_LEFT -> { browserEngine.evaluateJavascript("window.moveCursor(-$step, 0);"); return true }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> { browserEngine.evaluateJavascript("window.moveCursor($step, 0);"); return true }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { browserEngine.evaluateJavascript("window.clickCursor();"); return true }
             }
         }
 
@@ -403,10 +316,10 @@ class MainActivity : AppCompatActivity() {
         if (!isMouseModeActive && !isSidebarFocused && event.action == KeyEvent.ACTION_DOWN) {
             val scrollStep = 150
             when (event.keyCode) {
-                KeyEvent.KEYCODE_DPAD_DOWN -> { webView.evaluateJavascript("window.scrollBy(0, $scrollStep);", null); return true }
-                KeyEvent.KEYCODE_DPAD_UP -> { webView.evaluateJavascript("window.scrollBy(0, -$scrollStep);", null); return true }
-                KeyEvent.KEYCODE_DPAD_LEFT -> { webView.evaluateJavascript("window.scrollBy(-$scrollStep, 0);", null); return true }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> { webView.evaluateJavascript("window.scrollBy($scrollStep, 0);", null); return true }
+                KeyEvent.KEYCODE_DPAD_DOWN -> { browserEngine.evaluateJavascript("window.scrollBy(0, $scrollStep);"); return true }
+                KeyEvent.KEYCODE_DPAD_UP -> { browserEngine.evaluateJavascript("window.scrollBy(0, -$scrollStep);"); return true }
+                KeyEvent.KEYCODE_DPAD_LEFT -> { browserEngine.evaluateJavascript("window.scrollBy(-$scrollStep, 0);"); return true }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> { browserEngine.evaluateJavascript("window.scrollBy($scrollStep, 0);"); return true }
             }
         }
 
@@ -417,8 +330,8 @@ class MainActivity : AppCompatActivity() {
     override fun onBackPressed() {
         if (isMouseModeActive) {
             toggleMouseMode()
-        } else if (webView.canGoBack()) {
-            webView.goBack()
+        } else if (browserEngine.goBack()) {
+            // Handled inside engine
         } else {
             btnFacebook.requestFocus()
         }
