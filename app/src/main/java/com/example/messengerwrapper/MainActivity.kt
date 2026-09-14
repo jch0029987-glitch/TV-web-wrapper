@@ -104,19 +104,21 @@ class MainActivity : AppCompatActivity() {
         btnBack.setOnClickListener { browserEngine.goBack() }
         btnForward.setOnClickListener { browserEngine.goForward() }
         btnReload.setOnClickListener { browserEngine.reload() }
+        
         btnDesktop.setOnClickListener { 
             val isDesktop = btnDesktop.tag?.toString() == "desktop"
             browserEngine.setDesktopMode(!isDesktop)
             if (!isDesktop) {
                 btnDesktop.tag = "desktop"
                 btnDesktop.text = "Mobile Mode"
-                Toast.makeText(this, "Desktop Mode", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Desktop Mode Activated", Toast.LENGTH_SHORT).show()
             } else {
                 btnDesktop.tag = "mobile"
                 btnDesktop.text = "Desktop Mode"
-                Toast.makeText(this, "Mobile Mode", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Mobile Mode Activated", Toast.LENGTH_SHORT).show()
             }
         }
+        
         btnSettings.setOnClickListener { showKeyMappingDialog() }
         btnCheckUpdate.setOnClickListener { checkForUpdates(manualCheck = true) }
 
@@ -151,7 +153,7 @@ class MainActivity : AppCompatActivity() {
     private fun requestAudioPlaybackFocus() {
         val listener = AudioManager.OnAudioFocusChangeListener { focus ->
             if (focus == AudioManager.AUDIOFOCUS_LOSS || focus == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-                browserEngine.evaluateJavascript("document.querySelectorAll('video, audio').forEach(el => el.pause());")
+                browserEngine.evaluateJavascript("document.querySelectorAll('video, audio').forEach(el => el.pause());", null)
             }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -165,11 +167,11 @@ class MainActivity : AppCompatActivity() {
     private fun toggleMouseMode() {
         isMouseModeActive = !isMouseModeActive
         if (isMouseModeActive) {
-            tvModeHud.text = "Mode: Mouse"
-            browserEngine.evaluateJavascript("document.activeElement.blur(); window.setCursorVisible(true);")
+            tvModeHud.text = "Mode: Mouse & Scroll"
+            browserEngine.evaluateJavascript("document.activeElement.blur(); window.setCursorVisible(true);", null)
         } else {
             tvModeHud.text = "Mode: Scroll"
-            browserEngine.evaluateJavascript("window.setCursorVisible(false);")
+            browserEngine.evaluateJavascript("window.setCursorVisible(false);", null)
             etUrlBar.requestFocus()
         }
     }
@@ -177,7 +179,7 @@ class MainActivity : AppCompatActivity() {
     private fun showKeyMappingDialog() {
         val dialog = AlertDialog.Builder(this)
             .setTitle("Map Custom Remote Button")
-            .setMessage("Press the remote button you want to use to toggle Mouse Mode.")
+            .setMessage("Press the remote button you want to use to toggle Mouse/Scroll Mode.")
             .setNegativeButton("Cancel", null)
             .create()
 
@@ -239,8 +241,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (event.action == KeyEvent.ACTION_DOWN) {
-            if (event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_L) { etUrlBar.requestFocus(); etUrlBar.selectAll(); return true }
-            if (event.keyCode == KeyEvent.KEYCODE_F5 || (event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_R)) { browserEngine.reload(); return true }
+            if (event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_L) { 
+                etUrlBar.requestFocus()
+                etUrlBar.selectAll()
+                return true 
+            }
+            if (event.keyCode == KeyEvent.KEYCODE_F5 || (event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_R)) { 
+                browserEngine.reload()
+                return true 
+            }
         }
 
         val isTextEditing = (event.unicodeChar != 0 && event.action == KeyEvent.ACTION_DOWN) ||
@@ -252,13 +261,28 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (isMouseModeActive && event.action == KeyEvent.ACTION_DOWN) {
-            val step = 30
+            val scrollStep = 75
             when (event.keyCode) {
-                KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_S -> { browserEngine.evaluateJavascript("window.moveCursor(0, $step);"); return true }
-                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_W -> { browserEngine.evaluateJavascript("window.moveCursor(0, -$step);"); return true }
-                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_A -> { browserEngine.evaluateJavascript("window.moveCursor(-$step, 0);"); return true }
-                KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_D -> { browserEngine.evaluateJavascript("window.moveCursor($step, 0);"); return true }
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { browserEngine.evaluateJavascript("window.clickCursor();"); return true }
+                KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_S -> { 
+                    browserEngine.evaluateJavascript("window.scrollBy(0, $scrollStep);", null)
+                    return true 
+                }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_W -> { 
+                    browserEngine.evaluateJavascript("window.scrollBy(0, -$scrollStep);", null)
+                    return true 
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_A -> { 
+                    browserEngine.evaluateJavascript("window.scrollBy(-$scrollStep, 0);", null)
+                    return true 
+                }
+                KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_D -> { 
+                    browserEngine.evaluateJavascript("window.scrollBy($scrollStep, 0);", null)
+                    return true 
+                }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { 
+                    browserEngine.evaluateJavascript("window.clickCursor();", null)
+                    return true 
+                }
             }
         }
 
