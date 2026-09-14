@@ -4,49 +4,72 @@ import android.content.Context
 import android.view.View
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
+import org.mozilla.geckoview.GeckoSessionSettings
 import org.mozilla.geckoview.GeckoView
+import org.mozilla.geckoview.StorageController
 
-class GeckoEngine(private val context: Context) : IBrowserEngine {
+class GeckoEngine(private val context: Context, private val runtime: GeckoRuntime) : IBrowserEngine {
 
-    private val session = GeckoSession()
-    private val runtime = GeckoRuntime.create(context)
+    private val geckoSession = GeckoSession()
     private val geckoView = GeckoView(context).apply {
-        setSession(session)
+        setSession(geckoSession)
     }
 
     init {
-        session.open(runtime)
+        geckoSession.open(runtime)
     }
+
+    override val session: GeckoSession
+        get() = geckoSession
 
     override val view: View
         get() = geckoView
 
     override fun loadUrl(url: String) {
-        session.loadUri(url)
+        geckoSession.loadUri(url)
     }
 
     override fun goBack(): Boolean {
-        if (session.navigation.canGoBack()) {
-            session.navigation.goBack()
+        val navigation = geckoSession.navigation
+        if (navigation != null && navigation.canGoBack()) {
+            navigation.goBack()
             return true
         }
         return false
     }
 
+    override fun goForward(): Boolean {
+        val navigation = geckoSession.navigation
+        if (navigation != null && navigation.canGoForward()) {
+            navigation.goForward()
+            return true
+        }
+        return false
+    }
+
+    override fun reload() {
+        geckoSession.reload()
+    }
+
     override fun setDesktopMode(enabled: Boolean) {
-        val settings = session.settings
-        if (enabled) {
-            settings.userAgentMode = GeckoSession.Settings.USER_AGENT_MODE_DESKTOP
+        val settings = geckoSession.settings
+        settings.userAgentMode = if (enabled) {
+            GeckoSessionSettings.USER_AGENT_MODE_DESKTOP
         } else {
-            settings.userAgentMode = GeckoSession.Settings.USER_AGENT_MODE_MOBILE
+            GeckoSessionSettings.USER_AGENT_MODE_MOBILE
         }
     }
 
-    override fun evaluateJavascript(script: String) {
-        session.evaluateJS(script) { _, _ -> }
+    override fun setAdBlockEnabled(enabled: Boolean) {
+        geckoSession.settings.useTrackingProtection = enabled
+    }
+
+    override fun evaluateJavascript(script: String, callback: ((String?) -> Unit)?) {
+        geckoSession.loadUri("javascript:$script")
+        callback?.invoke(null)
     }
 
     override fun clearCache() {
-        runtime.storage.clearData(GeckoRuntime.Storage.STORE_ALL) { }
+        runtime.storageController.clearData(StorageController.CLEAR_FLAGS_ALL)
     }
 }
