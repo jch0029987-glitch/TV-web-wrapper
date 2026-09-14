@@ -8,8 +8,7 @@ interface IBrowserEngine {
     fun goBack(): Boolean
     fun goForward(): Boolean
     fun reload()
-    fun setDesktopMode(enabled: Boolean)
-    fun setAdBlockEnabled(enabled: Boolean)
+    fun setDesktopMode(desktop: Boolean)
     fun evaluateJavascript(script: String, callback: ((String?) -> Unit)? = null)
     fun clearCache()
 }
