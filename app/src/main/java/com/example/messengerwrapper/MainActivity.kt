@@ -140,7 +140,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(onDownloadComplete)
-        // Properly cleanup WebView container to prevent memory leaks
         (browserEngine.view.parent as? ViewGroup)?.removeView(browserEngine.view)
         if (browserEngine.view is android.webkit.WebView) {
             (browserEngine.view as android.webkit.WebView).destroy()
@@ -148,7 +147,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initBrowserEngine(container: FrameLayout): IBrowserEngine {
-        val engine = WebViewEngine(this, nativeBridge)
+        val engine = WebViewEngine(
+            context = this,
+            nativeBridge = nativeBridge,
+            onAdBlocked = { blockedUrl ->
+                Log.d("MainActivity", "Ad blocked: $blockedUrl")
+            },
+            onDownloadRequested = { url, _, _ ->
+                downloadAndInstallApk(url)
+            }
+        )
         container.addView(engine.view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         return engine
     }
@@ -172,16 +180,16 @@ class MainActivity : AppCompatActivity() {
         if (isMouseModeActive) {
             tvModeHud.text = "Mode: Mouse & Scroll"
             browserEngine.view.requestFocus()
-            browserEngine.evaluateJavascript("document.activeElement.blur(); window.setCursorVisible(true);", null)
+            browserEngine.evaluateJavascript("document.activeElement.blur(); if(window.setCursorVisible) window.setCursorVisible(true);", null)
         } else {
             tvModeHud.text = "Mode: Scroll"
-            browserEngine.evaluateJavascript("window.setCursorVisible(false);", null)
+            browserEngine.evaluateJavascript("if(window.setCursorVisible) window.setCursorVisible(false);", null)
             etUrlBar.requestFocus()
         }
     }
 
     private fun showSettingsDialog() {
-        val options = arrayOf("Map Remote Button", "Clear WebView Cache", "Reload Extensions Cache")
+        val options = arrayOf("Map Remote Button", "Clear WebView Cache", "Reload Extensions Cache", "View History")
         AlertDialog.Builder(this)
             .setTitle("Browser Settings")
             .setItems(options) { _, which ->
@@ -197,10 +205,37 @@ class MainActivity : AppCompatActivity() {
                         Toast.makeText(this, "Extensions cache cleared. Reloading...", Toast.LENGTH_SHORT).show()
                         browserEngine.reload()
                     }
+                    3 -> showHistoryDialog()
                 }
             }
             .setNegativeButton("Close", null)
             .show()
+    }
+
+    private fun showHistoryDialog() {
+        thread {
+            val db = BrowserDatabase.getDatabase(this)
+            val historyList = runCatching { db.browserDao().getRecentHistory() }.getOrDefault(emptyList())
+            
+            runOnUiThread {
+                if (historyList.isEmpty()) {
+                    Toast.makeText(this, "No browsing history found.", Toast.LENGTH_SHORT).show()
+                    return@runOnUiThread
+                }
+                
+                val displayItems = historyList.map { "${it.title}\n${it.url}" }.toTypedArray()
+                
+                AlertDialog.Builder(this)
+                    .setTitle("Browsing History (Recent 100)")
+                    .setItems(displayItems) { _, index ->
+                        val selected = historyList[index]
+                        browserEngine.loadUrl(selected.url)
+                        etUrlBar.setText(selected.url)
+                    }
+                    .setNegativeButton("Close", null)
+                    .show()
+            }
+        }
     }
 
     private fun showKeyMappingDialog() {
@@ -306,7 +341,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (isMouseModeActive && event.action == KeyEvent.ACTION_DOWN) {
-            val scrollStep = 25 // Smooth step size for fluid free-roaming movement
+            val scrollStep = 25 
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_S -> { 
                     browserEngine.evaluateJavascript("if(window.tvScrollBy) { window.tvScrollBy(0, $scrollStep); } else { window.scrollBy(0, $scrollStep); }", null)
