@@ -30,10 +30,12 @@ jobs:
 
     - name: Set up Android SDK
       uses: android-actions/setup-android@v4
+      with:
+        packages: ''
 
-    - name: Install Android NDK and CMake
+    - name: Install Android SDK packages
       run: |
-        sdkmanager "cmake;3.22.1" "ndk;25.2.9519653"
+        sdkmanager "platforms;android-34" "build-tools;34.0.0" "cmake;3.22.1" "ndk;25.2.9519653"
 
     - name: Install Gradle
       run: sudo apt-get update && sudo apt-get install -y gradle
@@ -68,13 +70,13 @@ jobs:
         REPO_OWNER="${{ github.repository_owner }}"
         REPO_NAME="${{ github.event.repository.name }}"
 
-        cat << EOF > update.json
+        cat << EOF2 > update.json
         {
           "versionCode": ${{ env.VERSION_CODE }},
           "versionName": "$VERSION",
           "apkUrl": "https://github.com/$REPO_OWNER/$REPO_NAME/releases/download/$TAG/app-release.apk"
         }
-        EOF
+        EOF2
 
         git config --global user.name "GitHub Actions Bot"
         git config --global user.email "actions@github.com"
