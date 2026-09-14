@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "scripts": [
+    {
+      "name": "Core TV Cursor and Scroll Engine",
+      "file": "core-patch.js",
+      "match": "*"
+    }
+  ]
+}
