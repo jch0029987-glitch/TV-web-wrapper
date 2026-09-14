@@ -12,9 +12,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.os.StrictMode
 import android.util.Log
 import android.view.KeyEvent
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -25,8 +25,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import org.json.JSONObject
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
@@ -64,8 +62,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.Builder().permitAll().build())
-
         try {
             nativeBridge = NativeBridge()
             Log.d("NativeBridge", nativeBridge.nativeBridgeWorker("PING"))
@@ -92,15 +88,15 @@ class MainActivity : AppCompatActivity() {
         tvModeHud = findViewById(R.id.tvModeHud)
 
         val prefs = getSharedPreferences("BrowserPrefs", Context.MODE_PRIVATE)
-        val targetUrl = prefs.getString("custom_url", "https://duckduckgo.com") ?: "https://duckduckgo.com"
+        val defaultUrl = prefs.getString("custom_url", "https://duckduckgo.com") ?: "https://duckduckgo.com"
         
-        browserEngine.loadUrl(targetUrl)
-        etUrlBar.setText(targetUrl)
+        browserEngine.loadUrl(defaultUrl)
+        etUrlBar.setText(defaultUrl)
 
         btnGo.setOnClickListener { executeUrlSearch() }
         etUrlBar.setOnEditorActionListener { _, _, _ -> executeUrlSearch(); true }
         
-        btnHome.setOnClickListener { browserEngine.loadUrl(targetUrl); etUrlBar.setText(targetUrl) }
+        btnHome.setOnClickListener { browserEngine.loadUrl(defaultUrl); etUrlBar.setText(defaultUrl) }
         btnBack.setOnClickListener { browserEngine.goBack() }
         btnForward.setOnClickListener { browserEngine.goForward() }
         btnReload.setOnClickListener { browserEngine.reload() }
@@ -125,6 +121,8 @@ class MainActivity : AppCompatActivity() {
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) RECEIVER_EXPORTED else 0
         registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), flags)
 
+        // Fetch remote config flags and updates on startup
+        fetchRemoteConfig()
         checkForUpdates(manualCheck = false)
     }
 
@@ -142,6 +140,11 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(onDownloadComplete)
+        // Properly cleanup WebView container to prevent memory leaks
+        (browserEngine.view.parent as? ViewGroup)?.removeView(browserEngine.view)
+        if (browserEngine.view is android.webkit.WebView) {
+            (browserEngine.view as android.webkit.WebView).destroy()
+        }
     }
 
     private fun initBrowserEngine(container: FrameLayout): IBrowserEngine {
@@ -189,8 +192,8 @@ class MainActivity : AppCompatActivity() {
                         Toast.makeText(this, "WebView Cache Cleared", Toast.LENGTH_SHORT).show()
                     }
                     2 -> {
-                        val cacheFile = File(filesDir, "cache_core-patch.js")
-                        if (cacheFile.exists()) cacheFile.delete()
+                        val cacheDir = filesDir
+                        cacheDir.listFiles()?.forEach { if (it.name.startsWith("cache_")) it.delete() }
                         Toast.makeText(this, "Extensions cache cleared. Reloading...", Toast.LENGTH_SHORT).show()
                         browserEngine.reload()
                     }
@@ -218,19 +221,37 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
 
+    private fun fetchRemoteConfig() {
+        thread {
+            val configStr = NetworkClient.fetchText("https://raw.githubusercontent.com/$repoOwner/$repoName/main/config.json")
+            if (configStr != null) {
+                try {
+                    val config = JSONObject(configStr)
+                    val adBlockingEnabled = config.optBoolean("enableAdBlocking", true)
+                    Log.d("MainActivity", "Remote config loaded successfully (AdBlocking: $adBlockingEnabled)")
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "Failed to parse config.json", e)
+                }
+            }
+        }
+    }
+
     private fun checkForUpdates(manualCheck: Boolean = false) {
         thread {
-            try {
-                val connection = URL("https://raw.githubusercontent.com/$repoOwner/$repoName/main/update.json").openConnection() as HttpURLConnection
-                connection.connectTimeout = 5000
-                val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-                if (json.getInt("versionCode") > packageManager.getPackageInfo(packageName, 0).longVersionCode) {
-                    runOnUiThread { showUpdateDialog(json.getString("apkUrl"), json.getString("versionName"), json.optString("releaseNotes", "")) }
-                } else if (manualCheck) {
-                    runOnUiThread { Toast.makeText(this, "Up to date.", Toast.LENGTH_SHORT).show() }
+            val jsonStr = NetworkClient.fetchText("https://raw.githubusercontent.com/$repoOwner/$repoName/main/update.json")
+            if (jsonStr != null) {
+                try {
+                    val json = JSONObject(jsonStr)
+                    if (json.getInt("versionCode") > packageManager.getPackageInfo(packageName, 0).longVersionCode) {
+                        runOnUiThread { showUpdateDialog(json.getString("apkUrl"), json.getString("versionName"), json.optString("releaseNotes", "")) }
+                    } else if (manualCheck) {
+                        runOnUiThread { Toast.makeText(this, "Up to date.", Toast.LENGTH_SHORT).show() }
+                    }
+                } catch (e: Exception) {
+                    if (manualCheck) runOnUiThread { Toast.makeText(this, "Update check failed.", Toast.LENGTH_SHORT).show() }
                 }
-            } catch (e: Exception) {
-                if (manualCheck) runOnUiThread { Toast.makeText(this, "Update check failed.", Toast.LENGTH_SHORT).show() }
+            } else if (manualCheck) {
+                runOnUiThread { Toast.makeText(this, "Update check failed.", Toast.LENGTH_SHORT).show() }
             }
         }
     }
@@ -285,7 +306,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (isMouseModeActive && event.action == KeyEvent.ACTION_DOWN) {
-            val scrollStep = 25 // Fluid step size for smooth free-roaming navigation
+            val scrollStep = 25 // Smooth step size for fluid free-roaming movement
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_S -> { 
                     browserEngine.evaluateJavascript("if(window.tvScrollBy) { window.tvScrollBy(0, $scrollStep); } else { window.scrollBy(0, $scrollStep); }", null)
