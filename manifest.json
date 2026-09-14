@@ -5,6 +5,11 @@
       "name": "Core TV Cursor and Scroll Engine",
       "file": "core-patch.js",
       "match": "*"
+    },
+    {
+      "name": "Mobile Site Enforcer",
+      "file": "mobile-enforcer.js",
+      "match": "youtube.com|facebook.com"
     }
   ]
 }
