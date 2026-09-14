@@ -1,12 +1,12 @@
-// core-patch.js - Modular TV Navigation & Scroll Engine
-console.log("TV Browser: core-patch.js loaded successfully via manifest.");
+// core-patch.js - Fluid Free-Roaming TV Mouse & Scroll Engine
+console.log("TV Browser: core-patch.js loaded.");
 
 (function() {
     // 1. Visual Activation Badge
     if (!document.getElementById('tv-extension-badge')) {
         const badge = document.createElement('div');
         badge.id = 'tv-extension-badge';
-        badge.innerText = '✨ Modular Extension Active';
+        badge.innerText = '✨ Free-Movement Cursor Active';
         badge.style.position = 'fixed';
         badge.style.bottom = '10px';
         badge.style.right = '10px';
@@ -28,47 +28,41 @@ console.log("TV Browser: core-patch.js loaded successfully via manifest.");
         }, 4000);
     }
 
-    // 2. Track Free-Roaming Cursor Position State
+    // 2. Initialize Cursor Coordinates (Center Screen)
     if (window.tvCursorX === undefined) {
         window.tvCursorX = window.innerWidth / 2;
         window.tvCursorY = window.innerHeight / 2;
     }
 
-    // Update cursor element position style dynamically
     const cursor = document.getElementById('tv-mouse-cursor');
     if (cursor) {
         cursor.style.left = window.tvCursorX + 'px';
         cursor.style.top = window.tvCursorY + 'px';
     }
 
-    // 3. Robust TV Scroll & Cursor Movement Engine
+    // 3. Fluid Free-Movement & Scrolling Engine
     window.tvScrollBy = function(dx, dy) {
         if (!cursor) {
             window.scrollBy(dx, dy);
             return;
         }
 
-        // Move the visual cursor across the screen first
+        // Update cursor position smoothly in any direction (allows complete backwards/free movement)
         window.tvCursorX = Math.max(10, Math.min(window.innerWidth - 10, window.tvCursorX + dx));
         window.tvCursorY = Math.max(10, Math.min(window.innerHeight - 10, window.tvCursorY + dy));
         
         cursor.style.left = window.tvCursorX + 'px';
         cursor.style.top = window.tvCursorY + 'px';
 
-        // If cursor hits screen boundary, scroll the underlying page content
-        if (window.tvCursorX <= 15 || window.tvCursorX >= window.innerWidth - 15 ||
-            window.tvCursorY <= 15 || window.tvCursorY >= window.innerHeight - 15) {
-            window.scrollBy(dx * 2, dy * 2);
-            
-            // Also attempt to scroll active containers
-            const activeEl = document.activeElement;
-            if (activeEl && activeEl !== document.body) {
-                activeEl.scrollBy({ top: dy * 2, left: dx * 2, behavior: 'smooth' });
-            }
+        // If the cursor is pushed against the outer screen edges, scroll the page naturally
+        const edgeBuffer = 20;
+        if (window.tvCursorX <= edgeBuffer || window.tvCursorX >= window.innerWidth - edgeBuffer ||
+            window.tvCursorY <= edgeBuffer || window.tvCursorY >= window.innerHeight - edgeBuffer) {
+            window.scrollBy(dx * 1.5, dy * 1.5);
         }
     };
 
-    // 4. Enhanced Click Dispatcher at Current Cursor Coordinates
+    // 4. Cursor Click Dispatcher
     window.clickCursor = function() {
         if (!cursor) return;
         
@@ -86,11 +80,8 @@ console.log("TV Browser: core-patch.js loaded successfully via manifest.");
             if (typeof target.focus === 'function') {
                 target.focus();
             }
-            if (target.tagName === 'A' && target.href) {
-                window.location.href = target.href;
-            }
         }
     };
 
-    console.log("TV Browser: core-patch.js movement engine registered.");
+    console.log("TV Browser: Free-movement engine registered.");
 })();
