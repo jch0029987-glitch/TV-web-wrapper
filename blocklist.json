@@ -1,0 +1,9 @@
+{
+  "blockedDomains": [
+    "googlesyndication.com",
+    "doubleclick.net",
+    "facebook.net/ads",
+    "adservice.google.com",
+    "amazon-adsystem.com"
+  ]
+}
