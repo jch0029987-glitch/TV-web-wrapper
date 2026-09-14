@@ -168,6 +168,7 @@ class MainActivity : AppCompatActivity() {
         isMouseModeActive = !isMouseModeActive
         if (isMouseModeActive) {
             tvModeHud.text = "Mode: Mouse & Scroll"
+            browserEngine.view.requestFocus()
             browserEngine.evaluateJavascript("document.activeElement.blur(); window.setCursorVisible(true);", null)
         } else {
             tvModeHud.text = "Mode: Scroll"
@@ -284,26 +285,26 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (isMouseModeActive && event.action == KeyEvent.ACTION_DOWN) {
-            val scrollStep = 75
+            val scrollStep = 100
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_S -> { 
-                    browserEngine.evaluateJavascript("window.scrollBy(0, $scrollStep);", null)
+                    browserEngine.evaluateJavascript("if(window.tvScrollBy) { window.tvScrollBy(0, $scrollStep); } else { window.scrollBy(0, $scrollStep); }", null)
                     return true 
                 }
                 KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_W -> { 
-                    browserEngine.evaluateJavascript("window.scrollBy(0, -$scrollStep);", null)
+                    browserEngine.evaluateJavascript("if(window.tvScrollBy) { window.tvScrollBy(0, -$scrollStep); } else { window.scrollBy(0, -$scrollStep); }", null)
                     return true 
                 }
                 KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_A -> { 
-                    browserEngine.evaluateJavascript("window.scrollBy(-$scrollStep, 0);", null)
+                    browserEngine.evaluateJavascript("if(window.tvScrollBy) { window.tvScrollBy(-$scrollStep, 0); } else { window.scrollBy(-$scrollStep, 0); }", null)
                     return true 
                 }
                 KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_D -> { 
-                    browserEngine.evaluateJavascript("window.scrollBy($scrollStep, 0);", null)
+                    browserEngine.evaluateJavascript("window.tvScrollBy) { window.tvScrollBy($scrollStep, 0); } else { window.scrollBy($scrollStep, 0); }", null)
                     return true 
                 }
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { 
-                    browserEngine.evaluateJavascript("window.clickCursor();", null)
+                    browserEngine.evaluateJavascript("if(window.clickCursor) { window.clickCursor(); }", null)
                     return true 
                 }
             }
