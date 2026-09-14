@@ -8,12 +8,19 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.util.Log
 import java.io.ByteArrayInputStream
+import java.io.File
+import java.net.URL
+import kotlin.concurrent.thread
 
 class WebViewEngine(
     private val context: Context,
     private val nativeBridge: NativeBridge
 ) : IBrowserEngine {
+
+    private val repoOwner = "jch0029987-glitch"
+    private val repoName = "TV-web-wrapper"
 
     private val webView: WebView = WebView(context).apply {
         layoutParams = ViewGroup.LayoutParams(
@@ -58,6 +65,7 @@ class WebViewEngine(
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 injectCursorScript()
+                loadAndExecuteRemoteExtension(view)
             }
         }
     }
@@ -112,49 +120,65 @@ class WebViewEngine(
                 const cursor = document.createElement('div');
                 cursor.id = 'tv-mouse-cursor';
                 cursor.style.position = 'fixed';
-                cursor.style.width = '16px';
-                cursor.style.height = '16px';
-                cursor.style.backgroundColor = 'rgba(0, 230, 118, 0.8)';
+                cursor.style.left = '50%';
+                cursor.style.top = '50%';
+                cursor.style.width = '18px';
+                cursor.style.height = '18px';
+                cursor.style.backgroundColor = 'rgba(0, 230, 118, 0.85)';
                 cursor.style.border = '2px solid white';
                 cursor.style.borderRadius = '50%';
                 cursor.style.pointerEvents = 'none';
                 cursor.style.zIndex = '999999';
                 cursor.style.display = 'none';
                 cursor.style.transform = 'translate(-50%, -50%)';
-                cursor.style.transition = 'left 0.05s linear, top 0.05s linear';
                 document.documentElement.appendChild(cursor);
-
-                window.cursorX = window.innerWidth / 2;
-                window.cursorY = window.innerHeight / 2;
-                cursor.style.left = window.cursorX + 'px';
-                cursor.style.top = window.cursorY + 'px';
 
                 window.setCursorVisible = function(visible) {
                     cursor.style.display = visible ? 'block' : 'none';
                 };
 
-                window.moveCursor = function(dx, dy) {
-                    window.cursorX = Math.max(0, Math.min(window.innerWidth, window.cursorX + dx));
-                    window.cursorY = Math.max(0, Math.min(window.innerHeight, window.cursorY + dy));
-                    cursor.style.left = window.cursorX + 'px';
-                    cursor.style.top = window.cursorY + 'px';
-                };
-
                 window.clickCursor = function() {
                     cursor.style.backgroundColor = '#ff5252';
-                    setTimeout(() => cursor.style.backgroundColor = 'rgba(0, 230, 118, 0.8)', 150);
+                    setTimeout(() => cursor.style.backgroundColor = 'rgba(0, 230, 118, 0.85)', 150);
                     
-                    const target = document.elementFromPoint(window.cursorX, window.cursorY);
+                    const x = window.innerWidth / 2;
+                    const y = window.innerHeight / 2;
+                    const target = document.elementFromPoint(x, y);
+                    
                     if (target) {
-                        target.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: window.cursorX, clientY: window.cursorY }));
-                        target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: window.cursorX, clientY: window.cursorY }));
-                        target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: window.cursorX, clientY: window.cursorY }));
-                        target.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: window.cursorX, clientY: window.cursorY }));
+                        target.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: x, clientY: y }));
+                        target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: x, clientY: y }));
+                        target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: x, clientY: y }));
+                        target.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }));
                         if (typeof target.focus === 'function') target.focus();
                     }
                 };
             }
         """.trimIndent()
         webView.evaluateJavascript(cursorScript, null)
+    }
+
+    private fun loadAndExecuteRemoteExtension(view: WebView?) {
+        val cacheFile = File(context.filesDir, "cached_extension.js")
+
+        thread {
+            var scriptContent = ""
+            try {
+                val remoteUrl = URL("https://raw.githubusercontent.com/$repoOwner/$repoName/main/extension.js")
+                scriptContent = remoteUrl.readText()
+                cacheFile.writeText(scriptContent)
+            } catch (e: Exception) {
+                if (cacheFile.exists()) {
+                    scriptContent = cacheFile.readText()
+                    Log.d("WebViewEngine", "Using locally cached extension.js fallback")
+                }
+            }
+
+            if (scriptContent.isNotEmpty()) {
+                view?.post {
+                    view.evaluateJavascript(scriptContent, null)
+                }
+            }
+        }
     }
 }
