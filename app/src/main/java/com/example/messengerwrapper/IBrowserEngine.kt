@@ -6,7 +6,10 @@ interface IBrowserEngine {
     val view: View
     fun loadUrl(url: String)
     fun goBack(): Boolean
+    fun goForward(): Boolean
+    fun reload()
     fun setDesktopMode(enabled: Boolean)
+    fun setAdBlockEnabled(enabled: Boolean)
     fun evaluateJavascript(script: String, callback: ((String?) -> Unit)? = null)
     fun clearCache()
 }
