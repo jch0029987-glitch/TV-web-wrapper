@@ -69,14 +69,11 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val policy = StrictMode.ThreadPolicy.Builder().permitAll().build()
-        StrictMode.setThreadPolicy(policy)
+        StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.Builder().permitAll().build())
 
-        // Initialize Native C Bridge and load libbridge_worker.so
         try {
             nativeBridge = NativeBridge()
-            val pingResponse = nativeBridge.nativeBridgeWorker("PING")
-            Log.d("NativeBridge", pingResponse)
+            Log.d("NativeBridge", nativeBridge.nativeBridgeWorker("PING"))
         } catch (e: Exception) {
             Log.e("NativeBridge", "Failed to initialize native bridge library", e)
         }
@@ -103,64 +100,36 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("BrowserPrefs", Context.MODE_PRIVATE)
         val targetUrl = prefs.getString("custom_url", "https://duckduckgo.com") ?: "https://duckduckgo.com"
         
-        try {
-            val filterCheck = nativeBridge.nativeBridgeWorker("GET $targetUrl")
-            if (filterCheck.startsWith("HTTP/1.1 200 OK")) {
-                Toast.makeText(this, "Blocked tracker via C bridge", Toast.LENGTH_SHORT).show()
-            }
-        } catch (e: Exception) {
-            // Fallback if uninitialized
-        }
-
         browserEngine.loadUrl(targetUrl)
         etUrlBar.setText(targetUrl)
 
-        btnGo.setOnClickListener {
-            var input = etUrlBar.text.toString().trim()
-            if (input.isNotEmpty()) {
-                if (!input.startsWith("http://") && !input.startsWith("https://")) {
-                    input = if (input.contains(".") && !input.contains(" ")) {
-                        "https://$input"
-                    } else {
-                        "https://duckduckgo.com/?q=${Uri.encode(input)}"
-                    }
-                }
-                browserEngine.loadUrl(input)
-                etUrlBar.setText(input)
-            }
-        }
-
-        btnHome.setOnClickListener { 
-            browserEngine.loadUrl(targetUrl)
-            etUrlBar.setText(targetUrl)
-        }
+        btnGo.setOnClickListener { executeUrlSearch() }
+        etUrlBar.setOnEditorActionListener { _, _, _ -> executeUrlSearch(); true }
+        
+        btnHome.setOnClickListener { browserEngine.loadUrl(targetUrl); etUrlBar.setText(targetUrl) }
         btnBack.setOnClickListener { browserEngine.goBack() }
         btnForward.setOnClickListener { browserEngine.goForward() }
         btnReload.setOnClickListener { browserEngine.reload() }
-        btnDesktop.setOnClickListener {
-            browserEngine.setDesktopMode(true)
-            Toast.makeText(this, "Switched to Desktop Mode", Toast.LENGTH_SHORT).show()
-        }
-        btnMobile.setOnClickListener {
-            browserEngine.setDesktopMode(false)
-            Toast.makeText(this, "Switched to Mobile Mode", Toast.LENGTH_SHORT).show()
-        }
+        btnDesktop.setOnClickListener { browserEngine.setDesktopMode(true); Toast.makeText(this, "Desktop Mode", Toast.LENGTH_SHORT).show() }
+        btnMobile.setOnClickListener { browserEngine.setDesktopMode(false); Toast.makeText(this, "Mobile Mode", Toast.LENGTH_SHORT).show() }
         btnSettings.setOnClickListener { showKeyMappingDialog() }
-        btnCheckUpdate.setOnClickListener {
-            Toast.makeText(this, "Checking for updates...", Toast.LENGTH_SHORT).show()
-            checkForUpdates(manualCheck = true)
-        }
+        btnCheckUpdate.setOnClickListener { checkForUpdates(manualCheck = true) }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), RECEIVER_EXPORTED)
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
-            }
-        } else {
-            registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
-        }
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) RECEIVER_EXPORTED else 0
+        registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), flags)
 
         checkForUpdates(manualCheck = false)
+    }
+
+    private fun executeUrlSearch() {
+        var input = etUrlBar.text.toString().trim()
+        if (input.isNotEmpty()) {
+            if (!input.startsWith("http://") && !input.startsWith("https://")) {
+                input = if (input.contains(".") && !input.contains(" ")) "https://$input" else "https://duckduckgo.com/?q=${Uri.encode(input)}"
+            }
+            browserEngine.loadUrl(input)
+            etUrlBar.setText(input)
+        }
     }
 
     override fun onDestroy() {
@@ -170,48 +139,30 @@ class MainActivity : AppCompatActivity() {
 
     private fun initBrowserEngine(container: FrameLayout): IBrowserEngine {
         val engine = WebViewEngine(this, nativeBridge)
-        container.addView(
-            engine.view, 
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, 
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
+        container.addView(engine.view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         return engine
     }
 
     private fun requestAudioPlaybackFocus() {
-        val focusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
-            if (focusChange == AudioManager.AUDIOFOCUS_LOSS || focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+        val listener = AudioManager.OnAudioFocusChangeListener { focus ->
+            if (focus == AudioManager.AUDIOFOCUS_LOSS || focus == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
                 browserEngine.evaluateJavascript("document.querySelectorAll('video, audio').forEach(el => el.pause());")
             }
         }
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .build()
-                )
-                .setOnAudioFocusChangeListener(focusListener)
-                .build()
-            audioManager.requestAudioFocus(focusRequest)
+            audioManager.requestAudioFocus(AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN).setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build()).setOnAudioFocusChangeListener(listener).build())
         } else {
             @Suppress("DEPRECATION")
-            audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+            audioManager.requestAudioFocus(listener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
         }
     }
 
     private fun toggleMouseMode() {
         isMouseModeActive = !isMouseModeActive
         if (isMouseModeActive) {
-            Toast.makeText(this, "Mouse Mode: ON", Toast.LENGTH_SHORT).show()
             tvModeHud.text = "Mode: Mouse"
             browserEngine.evaluateJavascript("document.activeElement.blur(); window.setCursorVisible(true);")
         } else {
-            Toast.makeText(this, "Mouse Mode: OFF (Sidebar)", Toast.LENGTH_SHORT).show()
             tvModeHud.text = "Mode: Scroll"
             browserEngine.evaluateJavascript("window.setCursorVisible(false);")
             etUrlBar.requestFocus()
@@ -231,9 +182,7 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "Button mapped successfully!", Toast.LENGTH_SHORT).show()
                 dialog.dismiss()
                 true
-            } else {
-                false
-            }
+            } else false
         }
         dialog.show()
     }
@@ -241,126 +190,70 @@ class MainActivity : AppCompatActivity() {
     private fun checkForUpdates(manualCheck: Boolean = false) {
         thread {
             try {
-                val jsonURL = URL("https://raw.githubusercontent.com/$repoOwner/$repoName/main/update.json")
-                val connection = jsonURL.openConnection() as HttpURLConnection
+                val connection = URL("https://raw.githubusercontent.com/$repoOwner/$repoName/main/update.json").openConnection() as HttpURLConnection
                 connection.connectTimeout = 5000
-                connection.readTimeout = 5000
-                connection.requestMethod = "GET"
-                
-                val response = connection.inputStream.bufferedReader().use { it.readText() }
-                val json = JSONObject(response)
-                val remoteVersionCode = json.getInt("versionCode")
-                val apkUrl = json.getString("apkUrl")
-                val versionName = json.getString("versionName")
-                val releaseNotes = json.optString("releaseNotes", "Performance improvements and bug fixes.")
-                
-                val localVersionCode = packageManager.getPackageInfo(packageName, 0).longVersionCode
-
-                if (remoteVersionCode > localVersionCode) {
-                    runOnUiThread { showUpdateDialog(apkUrl, versionName, releaseNotes) }
+                val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+                if (json.getInt("versionCode") > packageManager.getPackageInfo(packageName, 0).longVersionCode) {
+                    runOnUiThread { showUpdateDialog(json.getString("apkUrl"), json.getString("versionName"), json.optString("releaseNotes", "")) }
                 } else if (manualCheck) {
-                    runOnUiThread {
-                        Toast.makeText(this, "You are using the latest version.", Toast.LENGTH_SHORT).show()
-                    }
+                    runOnUiThread { Toast.makeText(this, "Up to date.", Toast.LENGTH_SHORT).show() }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
-                if (manualCheck) {
-                    runOnUiThread {
-                        Toast.makeText(this, "Failed to check for updates. Check network.", Toast.LENGTH_LONG).show()
-                    }
-                }
+                if (manualCheck) runOnUiThread { Toast.makeText(this, "Update check failed.", Toast.LENGTH_SHORT).show() }
             }
         }
     }
 
-    private fun showUpdateDialog(apkUrl: String, newVersion: String, releaseNotes: String) {
+    private fun showUpdateDialog(apkUrl: String, version: String, notes: String) {
         AlertDialog.Builder(this)
-            .setTitle("Update Available ($newVersion)")
-            .setMessage("Here are the changes in this version:\n\n$releaseNotes\n\nThe app will update automatically.")
-            .setPositiveButton("Update Now") { _, _ -> downloadAndInstallApk(apkUrl) }
+            .setTitle("Update Available ($version)")
+            .setMessage("$notes\n\nInstall update now?")
+            .setPositiveButton("Update") { _, _ -> downloadAndInstallApk(apkUrl) }
             .setNegativeButton("Later", null)
             .show()
     }
 
     private fun downloadAndInstallApk(url: String) {
-        try {
-            Toast.makeText(this, "Starting download...", Toast.LENGTH_SHORT).show()
-            val destination = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk")
-            if (destination.exists()) destination.delete()
-
-            val request = DownloadManager.Request(Uri.parse(url))
-                .setTitle("App Update")
-                .setDescription("Downloading update...")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationUri(Uri.fromFile(destination))
-
-            val manager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            downloadId = manager.enqueue(request)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        val destination = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk")
+        if (destination.exists()) destination.delete()
+        val request = DownloadManager.Request(Uri.parse(url)).setDestinationUri(Uri.fromFile(destination))
+        downloadId = (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
     }
 
     private fun installDownloadedApk() {
         val file = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk")
         if (!file.exists()) return
-
-        val apkUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(apkUri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        startActivity(intent)
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        val mappedKey = KeyMappingHelper.getMappedKey(this)
-        if (event.keyCode == mappedKey && event.action == KeyEvent.ACTION_DOWN) {
+        if (event.keyCode == KeyMappingHelper.getMappedKey(this) && event.action == KeyEvent.ACTION_DOWN) {
             toggleMouseMode()
             return true
         }
 
-        val isTextEditing = (event.unicodeChar != 0 && event.action == KeyEvent.ACTION_DOWN) ||
-                            event.keyCode == KeyEvent.KEYCODE_DEL ||
-                            event.keyCode == KeyEvent.KEYCODE_ENTER ||
-                            event.keyCode == KeyEvent.KEYCODE_SPACE ||
-                            event.keyCode == KeyEvent.KEYCODE_TAB
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            if (event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_L) { etUrlBar.requestFocus(); etUrlBar.selectAll(); return true }
+            if (event.keyCode == KeyEvent.KEYCODE_F5 || (event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_R)) { browserEngine.reload(); return true }
+        }
 
-        if (isTextEditing && !isMouseModeActive) {
+        val isTextEditing = (event.unicodeChar != 0 && event.action == KeyEvent.ACTION_DOWN) ||
+                            event.keyCode == KeyEvent.KEYCODE_DEL || event.keyCode == KeyEvent.KEYCODE_ENTER ||
+                            event.keyCode == KeyEvent.KEYCODE_SPACE || event.keyCode == KeyEvent.KEYCODE_TAB
+
+        if (etUrlBar.hasFocus() || (isTextEditing && !isMouseModeActive)) {
             return super.dispatchKeyEvent(event)
         }
 
         if (isMouseModeActive && event.action == KeyEvent.ACTION_DOWN) {
             val step = 30
             when (event.keyCode) {
-                KeyEvent.KEYCODE_DPAD_DOWN -> { browserEngine.evaluateJavascript("window.moveCursor(0, $step);"); return true }
-                KeyEvent.KEYCODE_DPAD_UP -> { browserEngine.evaluateJavascript("window.moveCursor(0, -$step);"); return true }
-                KeyEvent.KEYCODE_DPAD_LEFT -> { browserEngine.evaluateJavascript("window.moveCursor(-$step, 0);"); return true }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> { browserEngine.evaluateJavascript("window.moveCursor($step, 0);"); return true }
+                KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_S -> { browserEngine.evaluateJavascript("window.moveCursor(0, $step);"); return true }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_W -> { browserEngine.evaluateJavascript("window.moveCursor(0, -$step);"); return true }
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_A -> { browserEngine.evaluateJavascript("window.moveCursor(-$step, 0);"); return true }
+                KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_D -> { browserEngine.evaluateJavascript("window.moveCursor($step, 0);"); return true }
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { browserEngine.evaluateJavascript("window.clickCursor();"); return true }
-            }
-        }
-
-        val isSidebarFocused = etUrlBar.hasFocus() ||
-                               btnGo.hasFocus() ||
-                               btnHome.hasFocus() ||
-                               btnBack.hasFocus() ||
-                               btnForward.hasFocus() ||
-                               btnReload.hasFocus() ||
-                               btnDesktop.hasFocus() ||
-                               btnMobile.hasFocus() ||
-                               btnSettings.hasFocus() || 
-                               btnCheckUpdate.hasFocus()
-
-        if (!isMouseModeActive && !isSidebarFocused && event.action == KeyEvent.ACTION_DOWN) {
-            val scrollStep = 150
-            when (event.keyCode) {
-                KeyEvent.KEYCODE_DPAD_DOWN -> { browserEngine.evaluateJavascript("window.scrollBy(0, $scrollStep);"); return true }
-                KeyEvent.KEYCODE_DPAD_UP -> { browserEngine.evaluateJavascript("window.scrollBy(0, -$scrollStep);"); return true }
-                KeyEvent.KEYCODE_DPAD_LEFT -> { browserEngine.evaluateJavascript("window.scrollBy(-$scrollStep, 0);"); return true }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> { browserEngine.evaluateJavascript("window.scrollBy($scrollStep, 0);"); return true }
             }
         }
 
@@ -369,12 +262,7 @@ class MainActivity : AppCompatActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (isMouseModeActive) {
-            toggleMouseMode()
-        } else if (browserEngine.goBack()) {
-            // Handled inside engine
-        } else {
-            etUrlBar.requestFocus()
-        }
+        if (isMouseModeActive) toggleMouseMode()
+        else if (!browserEngine.goBack()) etUrlBar.requestFocus()
     }
 }
