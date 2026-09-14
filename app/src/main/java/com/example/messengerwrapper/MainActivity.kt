@@ -27,6 +27,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import org.json.JSONObject
+import org.mozilla.geckoview.GeckoRuntime
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -36,7 +37,8 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var browserEngine: IBrowserEngine
     private lateinit var nativeBridge: NativeBridge
-    
+    private lateinit var geckoRuntime: GeckoRuntime
+
     private lateinit var btnFacebook: Button
     private lateinit var btnMessenger: Button
     private lateinit var btnX: Button
@@ -147,7 +149,12 @@ class MainActivity : AppCompatActivity() {
         val useGecko = prefs.getBoolean("use_gecko", true)
 
         val engine: IBrowserEngine = try {
-            if (useGecko) GeckoEngine(this) else WebViewEngine(this)
+            if (useGecko) {
+                geckoRuntime = GeckoRuntime.create(this)
+                GeckoEngine(this, geckoRuntime)
+            } else {
+                WebViewEngine(this)
+            }
         } catch (e: Exception) {
             prefs.edit().putBoolean("use_gecko", false).apply()
             Toast.makeText(this, "Gecko engine failed. Falling back to WebView.", Toast.LENGTH_LONG).show()
