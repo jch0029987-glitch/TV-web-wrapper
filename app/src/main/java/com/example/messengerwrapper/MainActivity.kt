@@ -18,6 +18,7 @@ import android.os.StrictMode
 import android.util.Log
 import android.view.KeyEvent
 import android.widget.Button
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -27,7 +28,6 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import org.json.JSONObject
-import org.mozilla.geckoview.GeckoRuntime
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -37,15 +37,17 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var browserEngine: IBrowserEngine
     private lateinit var nativeBridge: NativeBridge
-    private lateinit var geckoRuntime: GeckoRuntime
 
-    private lateinit var btnFacebook: Button
-    private lateinit var btnMessenger: Button
-    private lateinit var btnX: Button
-    private lateinit var btnSettings: Button
-    private lateinit var btnCheckUpdate: Button
+    private lateinit var etUrlBar: EditText
+    private lateinit var btnGo: Button
+    private lateinit var btnHome: Button
+    private lateinit var btnBack: Button
+    private lateinit var btnForward: Button
+    private lateinit var btnReload: Button
     private lateinit var btnDesktop: Button
     private lateinit var btnMobile: Button
+    private lateinit var btnSettings: Button
+    private lateinit var btnCheckUpdate: Button
     private lateinit var tvModeHud: TextView
     
     private val repoOwner = "jch0029987-glitch"
@@ -86,19 +88,21 @@ class MainActivity : AppCompatActivity() {
         browserEngine = initBrowserEngine(container)
         browserEngine.clearCache()
 
-        btnFacebook = findViewById(R.id.btnFacebook)
-        btnMessenger = findViewById(R.id.btnMessenger)
-        btnX = findViewById(R.id.btnX)
-        btnSettings = findViewById(R.id.btnSettings)
-        btnCheckUpdate = findViewById(R.id.btnCheckUpdate)
+        etUrlBar = findViewById(R.id.etUrlBar)
+        btnGo = findViewById(R.id.btnGo)
+        btnHome = findViewById(R.id.btnHome)
+        btnBack = findViewById(R.id.btnBack)
+        btnForward = findViewById(R.id.btnForward)
+        btnReload = findViewById(R.id.btnReload)
         btnDesktop = findViewById(R.id.btnDesktop)
         btnMobile = findViewById(R.id.btnMobile)
+        btnSettings = findViewById(R.id.btnSettings)
+        btnCheckUpdate = findViewById(R.id.btnCheckUpdate)
         tvModeHud = findViewById(R.id.tvModeHud)
 
         val prefs = getSharedPreferences("BrowserPrefs", Context.MODE_PRIVATE)
-        val targetUrl = prefs.getString("custom_url", "https://www.facebook.com") ?: "https://www.facebook.com"
+        val targetUrl = prefs.getString("custom_url", "https://duckduckgo.com") ?: "https://duckduckgo.com"
         
-        // Pass target through native worker if needed
         try {
             val filterCheck = nativeBridge.nativeBridgeWorker("GET $targetUrl")
             if (filterCheck.startsWith("HTTP/1.1 200 OK")) {
@@ -109,15 +113,30 @@ class MainActivity : AppCompatActivity() {
         }
 
         browserEngine.loadUrl(targetUrl)
+        etUrlBar.setText(targetUrl)
 
-        btnFacebook.setOnClickListener { browserEngine.loadUrl("https://www.facebook.com") }
-        btnMessenger.setOnClickListener { browserEngine.loadUrl("https://www.facebook.com/messages") }
-        btnX.setOnClickListener { browserEngine.loadUrl("https://x.com") }
-        btnSettings.setOnClickListener { showKeyMappingDialog() }
-        btnCheckUpdate.setOnClickListener {
-            Toast.makeText(this, "Checking for updates...", Toast.LENGTH_SHORT).show()
-            checkForUpdates(manualCheck = true)
+        btnGo.setOnClickListener {
+            var input = etUrlBar.text.toString().trim()
+            if (input.isNotEmpty()) {
+                if (!input.startsWith("http://") && !input.startsWith("https://")) {
+                    input = if (input.contains(".") && !input.contains(" ")) {
+                        "https://$input"
+                    } else {
+                        "https://duckduckgo.com/?q=${Uri.encode(input)}"
+                    }
+                }
+                browserEngine.loadUrl(input)
+                etUrlBar.setText(input)
+            }
         }
+
+        btnHome.setOnClickListener { 
+            browserEngine.loadUrl(targetUrl)
+            etUrlBar.setText(targetUrl)
+        }
+        btnBack.setOnClickListener { browserEngine.goBack() }
+        btnForward.setOnClickListener { browserEngine.goForward() }
+        btnReload.setOnClickListener { browserEngine.reload() }
         btnDesktop.setOnClickListener {
             browserEngine.setDesktopMode(true)
             Toast.makeText(this, "Switched to Desktop Mode", Toast.LENGTH_SHORT).show()
@@ -125,6 +144,11 @@ class MainActivity : AppCompatActivity() {
         btnMobile.setOnClickListener {
             browserEngine.setDesktopMode(false)
             Toast.makeText(this, "Switched to Mobile Mode", Toast.LENGTH_SHORT).show()
+        }
+        btnSettings.setOnClickListener { showKeyMappingDialog() }
+        btnCheckUpdate.setOnClickListener {
+            Toast.makeText(this, "Checking for updates...", Toast.LENGTH_SHORT).show()
+            checkForUpdates(manualCheck = true)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -145,22 +169,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initBrowserEngine(container: FrameLayout): IBrowserEngine {
-        val prefs = getSharedPreferences("BrowserPrefs", Context.MODE_PRIVATE)
-        val useGecko = prefs.getBoolean("use_gecko", true)
-
-        val engine: IBrowserEngine = try {
-            if (useGecko) {
-                geckoRuntime = GeckoRuntime.create(this)
-                GeckoEngine(this, geckoRuntime)
-            } else {
-                WebViewEngine(this)
-            }
-        } catch (e: Exception) {
-            prefs.edit().putBoolean("use_gecko", false).apply()
-            Toast.makeText(this, "Gecko engine failed. Falling back to WebView.", Toast.LENGTH_LONG).show()
-            WebViewEngine(this)
-        }
-
+        val engine = WebViewEngine(this, nativeBridge)
         container.addView(
             engine.view, 
             FrameLayout.LayoutParams(
@@ -205,7 +214,7 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Mouse Mode: OFF (Sidebar)", Toast.LENGTH_SHORT).show()
             tvModeHud.text = "Mode: Scroll"
             browserEngine.evaluateJavascript("window.setCursorVisible(false);")
-            btnFacebook.requestFocus()
+            etUrlBar.requestFocus()
         }
     }
 
@@ -334,13 +343,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val isSidebarFocused = btnFacebook.hasFocus() || 
-                               btnMessenger.hasFocus() || 
-                               btnX.hasFocus() || 
-                               btnSettings.hasFocus() || 
-                               btnCheckUpdate.hasFocus() ||
+        val isSidebarFocused = etUrlBar.hasFocus() ||
+                               btnGo.hasFocus() ||
+                               btnHome.hasFocus() ||
+                               btnBack.hasFocus() ||
+                               btnForward.hasFocus() ||
+                               btnReload.hasFocus() ||
                                btnDesktop.hasFocus() ||
-                               btnMobile.hasFocus()
+                               btnMobile.hasFocus() ||
+                               btnSettings.hasFocus() || 
+                               btnCheckUpdate.hasFocus()
 
         if (!isMouseModeActive && !isSidebarFocused && event.action == KeyEvent.ACTION_DOWN) {
             val scrollStep = 150
@@ -362,7 +374,7 @@ class MainActivity : AppCompatActivity() {
         } else if (browserEngine.goBack()) {
             // Handled inside engine
         } else {
-            btnFacebook.requestFocus()
+            etUrlBar.requestFocus()
         }
     }
 }
