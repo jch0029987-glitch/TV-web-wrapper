@@ -12,6 +12,7 @@
         android:allowBackup="true"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:extractNativeLibs="true"
         android:theme="@style/Theme.AppCompat.NoActionBar">
 
         <!-- Startup activity serves as the main entry point with Leanback support -->
