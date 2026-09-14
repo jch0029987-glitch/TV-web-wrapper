@@ -15,11 +15,22 @@ class GeckoEngine(private val context: Context, private val runtime: GeckoRuntim
         setSession(geckoSession)
     }
 
+    private var canGoBackState = false
+    private var canGoForwardState = false
+
     init {
+        geckoSession.navigationDelegate = object : GeckoSession.NavigationDelegate {
+            override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {
+                canGoBackState = canGoBack
+            }
+            override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) {
+                canGoForwardState = canGoForward
+            }
+        }
         geckoSession.open(runtime)
     }
 
-    override val session: GeckoSession
+    val session: GeckoSession
         get() = geckoSession
 
     override val view: View
@@ -30,18 +41,16 @@ class GeckoEngine(private val context: Context, private val runtime: GeckoRuntim
     }
 
     override fun goBack(): Boolean {
-        val navigation = geckoSession.navigation
-        if (navigation != null && navigation.canGoBack()) {
-            navigation.goBack()
+        if (canGoBackState) {
+            geckoSession.goBack()
             return true
         }
         return false
     }
 
     override fun goForward(): Boolean {
-        val navigation = geckoSession.navigation
-        if (navigation != null && navigation.canGoForward()) {
-            navigation.goForward()
+        if (canGoForwardState) {
+            geckoSession.goForward()
             return true
         }
         return false
@@ -70,6 +79,6 @@ class GeckoEngine(private val context: Context, private val runtime: GeckoRuntim
     }
 
     override fun clearCache() {
-        runtime.storageController.clearData(StorageController.CLEAR_FLAGS_ALL)
+        runtime.storageController.clearData(StorageController.ClearFlags.ALL)
     }
 }
