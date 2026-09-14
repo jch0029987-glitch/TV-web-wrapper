@@ -7,8 +7,8 @@
       "match": "*"
     },
     {
-      "name": "Mobile Site Enforcer",
-      "file": "mobile-enforcer.js",
+      "name": "Tablet Layout & Viewport Enforcer",
+      "file": "tablet-patch.js",
       "match": "youtube.com|facebook.com"
     }
   ]
