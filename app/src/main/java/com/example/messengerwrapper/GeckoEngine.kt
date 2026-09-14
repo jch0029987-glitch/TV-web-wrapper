@@ -6,16 +6,20 @@ import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
 
-class GeckoEngine(context: Context) : IBrowserEngine {
-    private val geckoView = GeckoView(context)
-    private val runtime = GeckoRuntime.create(context)
-    private val session = GeckoSession().apply { open(runtime) }
+class GeckoEngine(private val context: Context) : IBrowserEngine {
 
-    init {
-        geckoView.setSession(session)
+    private val session = GeckoSession()
+    private val runtime = GeckoRuntime.create(context)
+    private val geckoView = GeckoView(context).apply {
+        setSession(session)
     }
 
-    override val view: View get() = geckoView
+    init {
+        session.open(runtime)
+    }
+
+    override val view: View
+        get() = geckoView
 
     override fun loadUrl(url: String) {
         session.loadUri(url)
@@ -30,24 +34,19 @@ class GeckoEngine(context: Context) : IBrowserEngine {
     }
 
     override fun setDesktopMode(enabled: Boolean) {
-        session.settings.userAgentMode = if (enabled) {
-            GeckoSession.Settings.USER_AGENT_MODE_DESKTOP
+        val settings = session.settings
+        if (enabled) {
+            settings.userAgentMode = GeckoSession.Settings.USER_AGENT_MODE_DESKTOP
         } else {
-            GeckoSession.Settings.USER_AGENT_MODE_MOBILE
+            settings.userAgentMode = GeckoSession.Settings.USER_AGENT_MODE_MOBILE
         }
     }
 
-    override fun evaluateJavascript(script: String, callback: ((String?) -> Unit)?) {
-        session.evaluateJS(script).then({ value ->
-            callback?.invoke(value?.toString())
-            null
-        }, { _ ->
-            callback?.invoke(null)
-            null
-        })
+    override fun evaluateJavascript(script: String) {
+        session.evaluateJS(script) { _, _ -> }
     }
 
     override fun clearCache() {
-        runtime.storage.clearData(GeckoRuntime.STORE_ALL)
+        runtime.storage.clearData(GeckoRuntime.Storage.STORE_ALL) { }
     }
 }
