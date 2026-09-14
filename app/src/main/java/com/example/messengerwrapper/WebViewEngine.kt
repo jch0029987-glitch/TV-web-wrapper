@@ -29,11 +29,29 @@ class WebViewEngine(context: Context) : IBrowserEngine {
         return false
     }
 
+    override fun goForward(): Boolean {
+        if (webView.canGoForward()) {
+            webView.goForward()
+            return true
+        }
+        return false
+    }
+
+    override fun reload() {
+        webView.reload()
+    }
+
     override fun setDesktopMode(enabled: Boolean) {
         val desktopAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         val mobileAgent = "Mozilla/5.0 (Linux; Android 10; SM-T870) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         webView.settings.userAgentString = if (enabled) desktopAgent else mobileAgent
         webView.reload()
+    }
+
+    override fun setAdBlockEnabled(enabled: Boolean) {
+        // WebView has no built-in tracking-protection API like GeckoView's
+        // useTrackingProtection. No-op unless a request-filtering
+        // WebViewClient (shouldInterceptRequest) is wired in separately.
     }
 
     override fun evaluateJavascript(script: String, callback: ((String?) -> Unit)?) {
