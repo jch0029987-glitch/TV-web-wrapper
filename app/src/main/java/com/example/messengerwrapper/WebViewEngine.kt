@@ -2,9 +2,17 @@ package com.example.messengerwrapper
 
 import android.content.Context
 import android.view.View
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
 import android.webkit.WebViewClient
+import java.io.ByteArrayInputStream
 
-class WebViewEngine(context: Context) : IBrowserEngine {
+class WebViewEngine(
+    private val context: Context,
+    private val nativeBridge: NativeBridge
+) : IBrowserEngine {
+
     private val webView = InteractiveWebView(context).apply {
         setLayerType(View.LAYER_TYPE_HARDWARE, null)
         settings.javaScriptEnabled = true
@@ -12,7 +20,31 @@ class WebViewEngine(context: Context) : IBrowserEngine {
         settings.databaseEnabled = true
         settings.loadWithOverviewMode = true
         settings.useWideViewPort = true
-        webViewClient = WebViewClient()
+
+        webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(
+                view: WebView,
+                request: WebResourceRequest
+            ): WebResourceResponse? {
+                val urlString = request.url.toString()
+                try {
+                    val response = nativeBridge.nativeBridgeWorker("GET $urlString")
+                    if (response.startsWith("HTTP/1.1 200 OK")) {
+                        return WebResourceResponse(
+                            "text/plain",
+                            "utf-8",
+                            200,
+                            "OK",
+                            mapOf("Access-Control-Allow-Origin" to "*"),
+                            ByteArrayInputStream(byteArrayOf())
+                        )
+                    }
+                } catch (e: Exception) {
+                    // Fallback on native exception
+                }
+                return super.shouldInterceptRequest(view, request)
+            }
+        }
     }
 
     override val view: View get() = webView
@@ -49,9 +81,7 @@ class WebViewEngine(context: Context) : IBrowserEngine {
     }
 
     override fun setAdBlockEnabled(enabled: Boolean) {
-        // WebView has no built-in tracking-protection API like GeckoView's
-        // useTrackingProtection. No-op unless a request-filtering
-        // WebViewClient (shouldInterceptRequest) is wired in separately.
+        // Native filter is handled via the C blocklist in nativeBridgeWorker
     }
 
     override fun evaluateJavascript(script: String, callback: ((String?) -> Unit)?) {
@@ -59,6 +89,8 @@ class WebViewEngine(context: Context) : IBrowserEngine {
     }
 
     override fun clearCache() {
-        webView.clearCache(false)
+        webView.clearCache(true)
+        android.webkit.CookieManager.getInstance().removeAllCookies(null)
+        android.webkit.WebStorage.getInstance().deleteAllData()
     }
 }
