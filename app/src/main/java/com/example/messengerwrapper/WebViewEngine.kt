@@ -2,6 +2,7 @@ package com.example.messengerwrapper
 
 import android.content.Context
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -9,26 +10,15 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import java.io.ByteArrayInputStream
 
-interface IBrowserEngine {
-    val view: View
-    fun loadUrl(url: String)
-    fun goBack(): Boolean
-    fun goForward(): Boolean
-    fun reload()
-    fun setDesktopMode(desktop: Boolean)
-    fun evaluateJavascript(script: String)
-    fun clearCache()
-}
-
 class WebViewEngine(
     private val context: Context,
     private val nativeBridge: NativeBridge
 ) : IBrowserEngine {
 
     private val webView: WebView = WebView(context).apply {
-        layoutParams = View.LayoutParams(
-            View.LayoutParams.MATCH_PARENT,
-            View.LayoutParams.MATCH_PARENT
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
         )
         settings.apply {
             javaScriptEnabled = true
@@ -103,13 +93,13 @@ class WebViewEngine(
         webView.settings.userAgentString = if (desktop) {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         } else {
-            null // Default mobile user agent
+            null
         }
         webView.reload()
     }
 
-    override fun evaluateJavascript(script: String) {
-        webView.evaluateJavascript(script, null)
+    override fun evaluateJavascript(script: String, callback: ((String?) -> Unit)?) {
+        webView.evaluateJavascript(script, callback)
     }
 
     override fun clearCache() {
