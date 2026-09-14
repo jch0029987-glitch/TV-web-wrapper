@@ -9,8 +9,10 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.util.Log
+import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.concurrent.thread
 
@@ -65,7 +67,9 @@ class WebViewEngine(
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 injectCursorScript()
-                loadAndExecuteRemoteExtension(view)
+                if (url != null) {
+                    loadAndExecuteRemoteExtensions(view, url)
+                }
             }
         }
     }
@@ -158,26 +162,72 @@ class WebViewEngine(
         webView.evaluateJavascript(cursorScript, null)
     }
 
-    private fun loadAndExecuteRemoteExtension(view: WebView?) {
-        val cacheFile = File(context.filesDir, "cached_extension.js")
-
+    private fun loadAndExecuteRemoteExtensions(view: WebView?, currentUrl: String) {
         thread {
-            var scriptContent = ""
             try {
-                val remoteUrl = URL("https://raw.githubusercontent.com/$repoOwner/$repoName/main/extension.js")
-                scriptContent = remoteUrl.readText()
-                cacheFile.writeText(scriptContent)
-            } catch (e: Exception) {
-                if (cacheFile.exists()) {
-                    scriptContent = cacheFile.readText()
-                    Log.d("WebViewEngine", "Using locally cached extension.js fallback")
+                // 1. Fetch the manifest registry configuration from GitHub
+                val manifestUrl = URL("https://raw.githubusercontent.com/$repoOwner/$repoName/main/manifest.json")
+                val connection = manifestUrl.openConnection() as HttpURLConnection
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
+                
+                if (connection.responseCode != 200) {
+                    Log.e("WebViewEngine", "Failed to fetch manifest.json, HTTP code: ${connection.responseCode}")
+                    return@thread
                 }
-            }
 
-            if (scriptContent.isNotEmpty()) {
-                view?.post {
-                    view.evaluateJavascript(scriptContent, null)
+                val manifestJson = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+                val scriptsArray = manifestJson.getJSONArray("scripts")
+                val combinedScripts = StringBuilder()
+
+                // 2. Iterate through declared extension modules
+                for (i in 0 until scriptsArray.length()) {
+                    val scriptObj = scriptsArray.getJSONObject(i)
+                    val fileName = scriptObj.getString("file")
+                    val urlPattern = scriptObj.getString("match")
+
+                    // 3. Match URL pattern (wildcard "*" matches everywhere, or check domain substring)
+                    if (urlPattern == "*" || currentUrl.contains(urlPattern)) {
+                        val cacheFile = File(context.filesDir, "cache_$fileName")
+                        var scriptContent = ""
+
+                        try {
+                            val scriptUrl = URL("https://raw.githubusercontent.com/$repoOwner/$repoName/main/$fileName")
+                            val scriptConn = scriptUrl.openConnection() as HttpURLConnection
+                            scriptConn.connectTimeout = 4000
+                            
+                            if (scriptConn.responseCode == 200) {
+                                scriptContent = scriptConn.inputStream.bufferedReader().use { it.readText() }
+                                cacheFile.writeText(scriptContent)
+                                Log.d("WebViewEngine", "Successfully fetched remote script: $fileName")
+                            } else {
+                                throw Exception("HTTP ${scriptConn.responseCode}")
+                            }
+                        } catch (e: Exception) {
+                            Log.w("WebViewEngine", "Fetch failed for $fileName: ${e.message}. Checking cache...")
+                            if (cacheFile.exists()) {
+                                scriptContent = cacheFile.readText()
+                                Log.d("WebViewEngine", "Loaded $fileName from local cache fallback.")
+                            }
+                        }
+
+                        if (scriptContent.isNotEmpty()) {
+                            combinedScripts.append("\n// --- Module: $fileName ---\n").append(scriptContent)
+                        }
+                    }
                 }
+
+                // 4. Inject and execute all matching script modules together
+                if (combinedScripts.isNotEmpty()) {
+                    view?.post {
+                        view.evaluateJavascript(combinedScripts.toString()) { result ->
+                            Log.d("WebViewEngine", "Extension modules executed successfully.")
+                        }
+                    }
+                }
+
+            } catch (e: Exception) {
+                Log.e("WebViewEngine", "Extension manifest execution error: ${e.message}")
             }
         }
     }
