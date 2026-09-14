@@ -189,7 +189,7 @@ class MainActivity : AppCompatActivity() {
                         Toast.makeText(this, "WebView Cache Cleared", Toast.LENGTH_SHORT).show()
                     }
                     2 -> {
-                        val cacheFile = File(filesDir, "cached_extensions.js")
+                        val cacheFile = File(filesDir, "cache_core-patch.js")
                         if (cacheFile.exists()) cacheFile.delete()
                         Toast.makeText(this, "Extensions cache cleared. Reloading...", Toast.LENGTH_SHORT).show()
                         browserEngine.reload()
@@ -285,7 +285,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (isMouseModeActive && event.action == KeyEvent.ACTION_DOWN) {
-            val scrollStep = 100
+            val scrollStep = 25 // Fluid step size for smooth free-roaming navigation
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_S -> { 
                     browserEngine.evaluateJavascript("if(window.tvScrollBy) { window.tvScrollBy(0, $scrollStep); } else { window.scrollBy(0, $scrollStep); }", null)
@@ -300,7 +300,7 @@ class MainActivity : AppCompatActivity() {
                     return true 
                 }
                 KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_D -> { 
-                    browserEngine.evaluateJavascript("window.tvScrollBy) { window.tvScrollBy($scrollStep, 0); } else { window.scrollBy($scrollStep, 0); }", null)
+                    browserEngine.evaluateJavascript("if(window.tvScrollBy) { window.tvScrollBy($scrollStep, 0); } else { window.scrollBy($scrollStep, 0); }", null)
                     return true 
                 }
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { 
