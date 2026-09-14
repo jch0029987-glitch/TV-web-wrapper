@@ -119,7 +119,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         
-        btnSettings.setOnClickListener { showKeyMappingDialog() }
+        btnSettings.setOnClickListener { showSettingsDialog() }
         btnCheckUpdate.setOnClickListener { checkForUpdates(manualCheck = true) }
 
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) RECEIVER_EXPORTED else 0
@@ -174,6 +174,29 @@ class MainActivity : AppCompatActivity() {
             browserEngine.evaluateJavascript("window.setCursorVisible(false);", null)
             etUrlBar.requestFocus()
         }
+    }
+
+    private fun showSettingsDialog() {
+        val options = arrayOf("Map Remote Button", "Clear WebView Cache", "Reload Extensions Cache")
+        AlertDialog.Builder(this)
+            .setTitle("Browser Settings")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> showKeyMappingDialog()
+                    1 -> {
+                        browserEngine.clearCache()
+                        Toast.makeText(this, "WebView Cache Cleared", Toast.LENGTH_SHORT).show()
+                    }
+                    2 -> {
+                        val cacheFile = File(filesDir, "cached_extensions.js")
+                        if (cacheFile.exists()) cacheFile.delete()
+                        Toast.makeText(this, "Extensions cache cleared. Reloading...", Toast.LENGTH_SHORT).show()
+                        browserEngine.reload()
+                    }
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     private fun showKeyMappingDialog() {
