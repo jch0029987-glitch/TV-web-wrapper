@@ -1,12 +1,10 @@
 package com.example.messengerwrapper
 
-import android.Manifest
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
@@ -24,8 +22,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import org.json.JSONObject
 import java.io.File
@@ -45,7 +41,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnForward: Button
     private lateinit var btnReload: Button
     private lateinit var btnDesktop: Button
-    private lateinit var btnMobile: Button
     private lateinit var btnSettings: Button
     private lateinit var btnCheckUpdate: Button
     private lateinit var tvModeHud: TextView
@@ -92,7 +87,6 @@ class MainActivity : AppCompatActivity() {
         btnForward = findViewById(R.id.btnForward)
         btnReload = findViewById(R.id.btnReload)
         btnDesktop = findViewById(R.id.btnDesktop)
-        btnMobile = findViewById(R.id.btnMobile)
         btnSettings = findViewById(R.id.btnSettings)
         btnCheckUpdate = findViewById(R.id.btnCheckUpdate)
         tvModeHud = findViewById(R.id.tvModeHud)
@@ -110,8 +104,19 @@ class MainActivity : AppCompatActivity() {
         btnBack.setOnClickListener { browserEngine.goBack() }
         btnForward.setOnClickListener { browserEngine.goForward() }
         btnReload.setOnClickListener { browserEngine.reload() }
-        btnDesktop.setOnClickListener { browserEngine.setDesktopMode(true); Toast.makeText(this, "Desktop Mode", Toast.LENGTH_SHORT).show() }
-        btnMobile.setOnClickListener { browserEngine.setDesktopMode(false); Toast.makeText(this, "Mobile Mode", Toast.LENGTH_SHORT).show() }
+        btnDesktop.setOnClickListener { 
+            val isDesktop = btnDesktop.tag?.toString() == "desktop"
+            browserEngine.setDesktopMode(!isDesktop)
+            if (!isDesktop) {
+                btnDesktop.tag = "desktop"
+                btnDesktop.text = "Mobile Mode"
+                Toast.makeText(this, "Desktop Mode", Toast.LENGTH_SHORT).show()
+            } else {
+                btnDesktop.tag = "mobile"
+                btnDesktop.text = "Desktop Mode"
+                Toast.makeText(this, "Mobile Mode", Toast.LENGTH_SHORT).show()
+            }
+        }
         btnSettings.setOnClickListener { showKeyMappingDialog() }
         btnCheckUpdate.setOnClickListener { checkForUpdates(manualCheck = true) }
 
