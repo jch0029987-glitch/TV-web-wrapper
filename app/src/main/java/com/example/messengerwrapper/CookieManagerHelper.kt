@@ -1,13 +1,18 @@
 package com.example.messengerwrapper
 
 import android.webkit.CookieManager
+import android.webkit.WebView
 
 object CookieManagerHelper {
 
     init {
-        val cookieManager = CookieManager.getInstance()
-        cookieManager.setAcceptCookie(true)
-        cookieManager.setAcceptThirdPartyCookies(null, true)
+        // Global cookie acceptance doesn't require a WebView instance
+        CookieManager.getInstance().setAcceptCookie(true)
+    }
+
+    // Call this once you have instantiated your WebView in MainActivity/Fragment
+    fun setupThirdPartyCookies(webView: WebView) {
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
     }
 
     fun syncCookies() {
