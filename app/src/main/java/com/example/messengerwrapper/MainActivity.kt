@@ -151,39 +151,38 @@ class MainActivity : ComponentActivity() {
                 showSettingsDialog()
                 return true
             }
-            // Multi-key remote fallbacks (Star button, Input icon, Mute, Info) ensure mouse mode is always accessible
+            // D-pad Center / Enter acts as the primary toggle and click handler
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
+                if (isCursorActive) {
+                    browserEngine.evaluateJavascript("if(window.handleEnterPress) { window.handleEnterPress(); } else { window.clickCursor(); }", null)
+                } else {
+                    isCursorActive = true
+                    tvModeHud.text = "Mode: Cursor"
+                    Toast.makeText(this, "Virtual Mouse: ON", Toast.LENGTH_SHORT).show()
+                    browserEngine.evaluateJavascript("window.setCursorVisible(true);", null)
+                }
+                return true
+            }
+            // Fallback remote shortcuts
             KeyEvent.KEYCODE_STAR, 
             KeyEvent.KEYCODE_TV_INPUT, 
             KeyEvent.KEYCODE_MUTE, 
-            KeyEvent.KEYCODE_INFO,
             customToggleKey -> {
                 isCursorActive = !isCursorActive
                 val status = if (isCursorActive) "ON" else "OFF"
                 tvModeHud.text = "Mode: " + if (isCursorActive) "Cursor" else "Scroll"
                 Toast.makeText(this, "Virtual Mouse: $status", Toast.LENGTH_SHORT).show()
-                browserEngine.evaluateJavascript("if(window.setCursorVisible) window.setCursorVisible($isCursorActive);", null)
+                browserEngine.evaluateJavascript("window.setCursorVisible($isCursorActive);", null)
                 return true
             }
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, 
-            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, 
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 if (isCursorActive) {
                     when (keyCode) {
-                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
-                            browserEngine.evaluateJavascript("if(window.clickCursor) window.clickCursor();", null)
-                        }
-                        KeyEvent.KEYCODE_DPAD_UP -> {
-                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(0, -25); else window.tvScrollBy(0, -35);", null)
-                        }
-                        KeyEvent.KEYCODE_DPAD_DOWN -> {
-                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(0, 25); else window.tvScrollBy(0, 35);", null)
-                        }
-                        KeyEvent.KEYCODE_DPAD_LEFT -> {
-                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(-25, 0); else window.tvScrollBy(-35, 0);", null)
-                        }
-                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(25, 0); else window.tvScrollBy(35, 0);", null)
-                        }
+                        KeyEvent.KEYCODE_DPAD_UP -> browserEngine.evaluateJavascript("window.moveCursor(0, -25);", null)
+                        KeyEvent.KEYCODE_DPAD_DOWN -> browserEngine.evaluateJavascript("window.moveCursor(0, 25);", null)
+                        KeyEvent.KEYCODE_DPAD_LEFT -> browserEngine.evaluateJavascript("window.moveCursor(-25, 0);", null)
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> browserEngine.evaluateJavascript("window.moveCursor(25, 0);", null)
                     }
                     return true
                 }
@@ -221,7 +220,7 @@ class MainActivity : ComponentActivity() {
         
         val dialog = AlertDialog.Builder(this)
             .setTitle("Map Mouse Toggle Button")
-            .setMessage("Current Mapped KeyCode: $currentKey\n\nPress any button on your remote now to assign it as the dedicated mouse toggle...")
+            .setMessage("Current Mapped KeyCode: $currentKey\n\nPress any button on your remote now to assign it as the mouse toggle...")
             .setNegativeButton("Cancel", null)
             .create()
 
@@ -242,7 +241,7 @@ class MainActivity : ComponentActivity() {
     private fun checkForUpdates(manualCheck: Boolean) {
         thread {
             try {
-                val updateJsonStr = NetworkClient.fetchText("https://raw.githubusercontent.com/jch0029987-glitch/TV-web-wrapper/main/version.json")
+                val updateJsonStr = NetworkClient.fetchText("https://raw.githubusercontent.com/jch0029987-glitch/TV-web-wrapper/main/update.json")
                 if (updateJsonStr != null) {
                     val json = JSONObject(updateJsonStr)
                     val latestVersionCode = json.getInt("versionCode")
