@@ -127,4 +127,27 @@ console.log("TV Browser: core-patch.js loaded.");
             if (typeof target.focus === 'function') target.focus();
         }
     };
+
+    // 5. Smart Enter Press Handler (Integrates with MainActivity)
+    window.handleEnterPress = function() {
+        if (!cursorVisible) return;
+        
+        const cursor = getOrCreateCursor();
+        if (!cursor) return;
+
+        cursor.style.display = 'none';
+        const target = document.elementFromPoint(cursorX, cursorY);
+        cursor.style.display = 'block';
+
+        if (target) {
+            // If user hits enter on an input field or text area, focus it
+            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+                target.focus();
+                return;
+            }
+            
+            // Otherwise, trigger standard click sequence
+            window.clickCursor();
+        }
+    };
 })();
