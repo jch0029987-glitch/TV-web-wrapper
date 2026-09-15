@@ -4,11 +4,12 @@ console.log("TV Browser: core-patch.js loaded.");
 (function() {
     let cursorX = window.innerWidth / 2;
     let cursorY = window.innerHeight / 2;
+    let cursorVisible = false;
     let cursorEl = null;
 
-    // 1. Create Cursor Element if it doesn't exist
+    // 1. Create Cursor Element
     function getOrCreateCursor() {
-        if (cursorEl && document.body.contains(cursorEl)) return cursorEl;
+        if (cursorEl && document.body && document.body.contains(cursorEl)) return cursorEl;
 
         cursorEl = document.createElement('div');
         cursorEl.id = 'tv-mouse-cursor';
@@ -29,23 +30,26 @@ console.log("TV Browser: core-patch.js loaded.");
         if (document.body) {
             document.body.appendChild(cursorEl);
         } else {
-            document.addEventListener('DOMContentLoaded', () => {
+            window.addEventListener('DOMContentLoaded', () => {
                 document.documentElement.appendChild(cursorEl);
             });
         }
         return cursorEl;
     }
 
+    // Initialize early
     getOrCreateCursor();
 
     // 2. Global Visibility Controller (called by MainActivity)
     window.setCursorVisible = function(visible) {
+        cursorVisible = visible;
         const cursor = getOrCreateCursor();
         if (cursor) {
             cursor.style.display = visible ? 'block' : 'none';
             if (visible) {
-                cursorX = window.innerWidth / 2;
-                cursorY = window.innerHeight / 2;
+                // Keep current position or reset to center if out of bounds
+                cursorX = Math.max(10, Math.min(window.innerWidth - 10, cursorX));
+                cursorY = Math.max(10, Math.min(window.innerHeight - 10, cursorY));
                 updateCursorPosition();
             }
         }
@@ -53,7 +57,6 @@ console.log("TV Browser: core-patch.js loaded.");
 
     function updateCursorPosition() {
         if (!cursorEl) return;
-        // Absolute hard screen bounds fallback
         cursorX = Math.max(10, Math.min(window.innerWidth - 10, cursorX));
         cursorY = Math.max(10, Math.min(window.innerHeight - 10, cursorY));
         cursorEl.style.left = cursorX + 'px';
@@ -62,8 +65,7 @@ console.log("TV Browser: core-patch.js loaded.");
 
     // 3. Free-Roaming Cursor & Edge-Scrolling Engine
     window.tvScrollBy = function(dx, dy) {
-        const cursor = getOrCreateCursor();
-        if (cursor && cursor.style.display === 'block') {
+        if (cursorVisible) {
             cursorX += dx;
             cursorY += dy;
 
@@ -105,6 +107,7 @@ console.log("TV Browser: core-patch.js loaded.");
 
     // 4. Click Simulator at exact Cursor coordinates
     window.clickCursor = function() {
+        if (!cursorVisible) return;
         const cursor = getOrCreateCursor();
         if (!cursor) return;
 
