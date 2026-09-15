@@ -40,7 +40,7 @@
         cursor.style.display = visible ? 'block' : 'none';
     };
 
-    // 3. Continuous Motion Engine (Bypasses text input locks when cursor mode is active)
+    // 3. Continuous Motion Engine
     function executeMotion(dx, dy) {
         cursorX = Math.max(0, Math.min(window.innerWidth - 12, cursorX + dx));
         cursorY = Math.max(0, Math.min(window.innerHeight - 12, cursorY + dy));
@@ -48,7 +48,6 @@
         cursor.style.left = `${cursorX}px`;
         cursor.style.top = `${cursorY}px`;
 
-        // Highlight element currently underneath the cursor for precise feedback
         const target = document.elementFromPoint(cursorX, cursorY);
         if (target) {
             cursor.style.backgroundColor = 'rgba(0, 255, 0, 0.9)'; // Green when hovering an interactive element
@@ -58,7 +57,6 @@
     }
 
     window.tvStartMotion = function(dx, dy) {
-        // If our virtual mouse cursor is active, always allow movement everywhere (even inside text inputs)
         if (window.isCursorActive) {
             if (dx !== 0 && !motionIntervalX) {
                 motionIntervalX = setInterval(() => executeMotion(dx, 0), 25);
@@ -69,7 +67,6 @@
             return;
         }
 
-        // Otherwise, check if a text input is actively focused for standard web navigation
         const activeEl = document.activeElement;
         const isTextField = activeEl && (
             activeEl.tagName === 'INPUT' || 
@@ -77,7 +74,6 @@
             activeEl.isContentEditable
         );
 
-        // Only allow motion if not trapped inside a text field
         if (!isTextField) {
             if (dx !== 0 && !motionIntervalX) {
                 motionIntervalX = setInterval(() => executeMotion(dx, 0), 25);
@@ -99,7 +95,7 @@
         }
     };
 
-    // 4. Click Simulation at Cursor Position
+    // 4. Click Simulation & Smart Input Focusing
     window.clickCursor = function() {
         if (!window.isCursorActive) return;
 
@@ -122,21 +118,20 @@
                 target.dispatchEvent(event);
             });
 
-            // If it's a focusable input or button, give it direct focus
-            if (typeof target.focus === 'function') {
+            // Explicitly focus text fields or interactive controls when clicked by cursor
+            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable || typeof target.focus === 'function') {
                 target.focus();
             }
         }
     };
 
-    // Fallback enter press handler
     window.handleEnterPress = function() {
         if (window.isCursorActive) {
             window.clickCursor();
         }
     };
 
-    // 5. Bluetooth Keyboard Handling & Toolbar Typing Fallback
+    // 5. Intelligent Keyboard Routing
     window.addEventListener('keydown', function(event) {
         const activeEl = document.activeElement;
         const isTextField = activeEl && (
@@ -145,13 +140,12 @@
             activeEl.isContentEditable
         );
 
-        // If a webpage text field is active, type there natively
+        // IF A WEB TEXT FIELD IS FOCUSED: Allow typing directly into the web field (do not intercept)
         if (isTextField) {
-            event.stopPropagation();
-            return;
+            return; 
         }
 
-        // Otherwise, route typing from the Bluetooth keyboard straight to the native TV toolbar (`etUrlBar`)
+        // FOR EVERYTHING ELSE: Route keystrokes to the native app toolbar (`etUrlBar`)
         if (window.nativeBridge && typeof window.nativeBridge.onKeyboardInput === 'function') {
             if (event.key === 'Backspace') {
                 window.nativeBridge.onKeyboardInput('', true);
