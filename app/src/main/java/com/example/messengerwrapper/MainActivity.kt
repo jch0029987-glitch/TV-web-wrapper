@@ -4,7 +4,9 @@ import android.app.AlertDialog
 import android.graphics.Color
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.inputmethod.EditorInfo
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -16,6 +18,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var browserEngine: WebViewEngine
     private lateinit var nativeBridge: NativeBridge
     private lateinit var debugServer: TvDebugServer
+    private lateinit var urlEditText: EditText
     private var isCursorActive = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,7 +47,7 @@ class MainActivity : ComponentActivity() {
             }
         )
 
-        // 3. Build Main Layout with Toolbar & Buttons
+        // 3. Build Main Layout with Top URL Bar, Navigation Toolbar, and WebView
         val rootLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
@@ -53,10 +56,10 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        // Toolbar Container for TV Buttons
-        val toolbar = LinearLayout(this).apply {
+        // Top URL Bar Container
+        val urlBarLayout = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(Color.parseColor("#1e293b"))
+            setBackgroundColor(Color.parseColor("#0f172a"))
             setPadding(16, 12, 16, 12)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -64,7 +67,59 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        // Helper to create TV-focusable action buttons
+        urlEditText = EditText(this).apply {
+            hint = "Enter URL or search query..."
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.parseColor("#94a3b8"))
+            setBackgroundColor(Color.parseColor("#334155"))
+            setPadding(16, 12, 16, 12)
+            isFocusable = true
+            isFocusableInTouchMode = true
+            imeOptions = EditorInfo.IME_ACTION_GO
+            setOnEditorActionListener { _, actionId, _ ->
+                if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
+                    loadTypedUrl()
+                    true
+                } else {
+                    false
+                }
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+            )
+        }
+
+        val btnGo = Button(this).apply {
+            text = "Go"
+            isFocusable = true
+            isFocusableInTouchMode = true
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#2563eb"))
+            setOnClickListener { loadTypedUrl() }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(12, 0, 0, 0)
+            }
+        }
+
+        urlBarLayout.addView(urlEditText)
+        urlBarLayout.addView(btnGo)
+
+        // Navigation & Action Toolbar Container
+        val toolbar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(Color.parseColor("#1e293b"))
+            setPadding(16, 8, 16, 8)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
         fun createToolbarButton(label: String, onClick: () -> Unit): Button {
             return Button(this).apply {
                 text = label
@@ -72,12 +127,12 @@ class MainActivity : ComponentActivity() {
                 isFocusableInTouchMode = true
                 setTextColor(Color.WHITE)
                 setBackgroundColor(Color.parseColor("#334155"))
-                setPadding(20, 10, 20, 10)
+                setPadding(16, 8, 16, 8)
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    setMargins(0, 0, 12, 0)
+                    setMargins(0, 0, 8, 0)
                 }
                 setOnClickListener { onClick() }
             }
@@ -93,7 +148,7 @@ class MainActivity : ComponentActivity() {
             browserEngine.reload()
         }
         val btnHome = createToolbarButton("🏠 Home") {
-            browserEngine.loadUrl("https://html.duckduckgo.com")
+            loadUrlAndSync("https://html.duckduckgo.com")
         }
         val btnSettings = createToolbarButton("⚙ Settings") {
             showSettingsDialog()
@@ -105,7 +160,8 @@ class MainActivity : ComponentActivity() {
         toolbar.addView(btnHome)
         toolbar.addView(btnSettings)
 
-        // Add Toolbar and WebView to Root Layout
+        // Assemble Layout
+        rootLayout.addView(urlBarLayout)
         rootLayout.addView(toolbar)
         rootLayout.addView(
             browserEngine.view,
@@ -120,7 +176,7 @@ class MainActivity : ComponentActivity() {
         debugServer = TvDebugServer(
             port = 8080,
             onNavigate = { url ->
-                runOnUiThread { browserEngine.loadUrl(url) }
+                runOnUiThread { loadUrlAndSync(url) }
             },
             onReloadExtensions = {
                 runOnUiThread {
@@ -146,7 +202,22 @@ class MainActivity : ComponentActivity() {
         checkForUpdates()
 
         // 6. Load initial homepage
-        browserEngine.loadUrl("https://html.duckduckgo.com")
+        loadUrlAndSync("https://html.duckduckgo.com")
+    }
+
+    private fun loadTypedUrl() {
+        var target = urlEditText.text.toString().trim()
+        if (target.isNotEmpty()) {
+            if (!target.startsWith("http://") && !target.startsWith("https://")) {
+                target = "https://html.duckduckgo.com/html?q=$target"
+            }
+            loadUrlAndSync(target)
+        }
+    }
+
+    private fun loadUrlAndSync(url: String) {
+        urlEditText.setText(url)
+        browserEngine.loadUrl(url)
     }
 
     private fun checkForUpdates() {
@@ -172,7 +243,7 @@ class MainActivity : ComponentActivity() {
                                 .setTitle("Update Available")
                                 .setMessage("A new version of the TV browser wrapper is available. Would you like to update now?")
                                 .setPositiveButton("Update") { _, _ ->
-                                    browserEngine.loadUrl(apkUrl)
+                                    loadUrlAndSync(apkUrl)
                                     Toast.makeText(this, "Downloading update...", Toast.LENGTH_SHORT).show()
                                 }
                                 .setNegativeButton("Later", null)
@@ -193,10 +264,16 @@ class MainActivity : ComponentActivity() {
                 return true
             }
             KeyEvent.KEYCODE_PROG_RED -> {
+                // Toggle virtual mouse cursor via remote red button
                 isCursorActive = !isCursorActive
                 val status = if (isCursorActive) "ON" else "OFF"
                 Toast.makeText(this, "Virtual Mouse: $status", Toast.LENGTH_SHORT).show()
                 browserEngine.evaluateJavascript("if(window.setCursorVisible) window.setCursorVisible($isCursorActive);", null)
+                return true
+            }
+            // Custom Key Mappings for Media / Colored Buttons
+            KeyEvent.KEYCODE_PROG_GREEN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                Toast.makeText(this, "Custom Action Triggered", Toast.LENGTH_SHORT).show()
                 return true
             }
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, 
@@ -232,7 +309,8 @@ class MainActivity : ComponentActivity() {
             "View History", 
             "Clear WebView Cache", 
             "Reload Extensions Cache", 
-            "View Local Debug Logs"
+            "View Local Debug Logs",
+            "Configure Custom Button Mapping"
         )
         AlertDialog.Builder(this)
             .setTitle("Browser Settings")
@@ -250,9 +328,18 @@ class MainActivity : ComponentActivity() {
                         Toast.makeText(this, "Extensions reloaded", Toast.LENGTH_SHORT).show()
                     }
                     3 -> showDebugLogsDialog()
+                    4 -> showKeyMappingDialog()
                 }
             }
             .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showKeyMappingDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Custom Button Mapping")
+            .setMessage("• Red Remote Button: Toggle Virtual Mouse\n• Green / Play-Pause: Custom Action Shortcut\n• Menu / Settings: Opens Settings Dialog\n• D-Pad (when mouse active): Steers Virtual Cursor")
+            .setPositiveButton("OK", null)
             .show()
     }
 
@@ -270,7 +357,7 @@ class MainActivity : ComponentActivity() {
                     AlertDialog.Builder(this)
                         .setTitle("Browsing History")
                         .setItems(titles) { _, index ->
-                            browserEngine.loadUrl(historyList[index].url)
+                            loadUrlAndSync(historyList[index].url)
                         }
                         .setNegativeButton("Close", null)
                         .show()
