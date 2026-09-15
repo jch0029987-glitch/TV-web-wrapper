@@ -19,7 +19,9 @@ abstract class BrowserDatabase : RoomDatabase() {
                     context.applicationContext,
                     BrowserDatabase::class.java,
                     "tv_browser_database"
-                ).build()
+                )
+                .fallbackToDestructiveMigration()
+                .build()
                 INSTANCE = instance
                 instance
             }
