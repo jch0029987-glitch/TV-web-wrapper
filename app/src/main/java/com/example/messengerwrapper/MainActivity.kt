@@ -1,13 +1,13 @@
 package com.example.messengerwrapper
 
 import android.app.AlertDialog
-import android.graphics.Color
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
-import android.widget.LinearLayout
+import android.widget.FrameLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import org.json.JSONObject
@@ -18,11 +18,15 @@ class MainActivity : ComponentActivity() {
     private lateinit var browserEngine: WebViewEngine
     private lateinit var nativeBridge: NativeBridge
     private lateinit var debugServer: TvDebugServer
-    private lateinit var urlEditText: EditText
+    
+    private lateinit var etUrlBar: EditText
+    private lateinit var tvModeHud: TextView
     private var isCursorActive = false
+    private var isDesktopMode = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
         
         // 1. Global crash & exception interceptor for dashboard streaming
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
@@ -47,132 +51,63 @@ class MainActivity : ComponentActivity() {
             }
         )
 
-        // 3. Build Main Layout with Top URL Bar, Navigation Toolbar, and WebView
-        val rootLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.MATCH_PARENT
-            )
-        }
+        // Attach WebView view into the XML FrameLayout container
+        val webViewContainer = findViewById<FrameLayout>(R.id.webViewContainer)
+        webViewContainer.addView(browserEngine.view)
 
-        // Top URL Bar Container
-        val urlBarLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(Color.parseColor("#0f172a"))
-            setPadding(16, 12, 16, 12)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        }
+        // Bind XML UI elements
+        etUrlBar = findViewById(R.id.etUrlBar)
+        tvModeHud = findViewById(R.id.tvModeHud)
 
-        urlEditText = EditText(this).apply {
-            hint = "Enter URL or search query..."
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.parseColor("#94a3b8"))
-            setBackgroundColor(Color.parseColor("#334155"))
-            setPadding(16, 12, 16, 12)
-            isFocusable = true
-            isFocusableInTouchMode = true
-            imeOptions = EditorInfo.IME_ACTION_GO
-            setOnEditorActionListener { _, actionId, _ ->
-                if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
-                    loadTypedUrl()
-                    true
-                } else {
-                    false
-                }
-            }
-            layoutParams = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                1f
-            )
-        }
+        val btnBack = findViewById<Button>(R.id.btnBack)
+        val btnForward = findViewById<Button>(R.id.btnForward)
+        val btnHome = findViewById<Button>(R.id.btnHome)
+        val btnReload = findViewById<Button>(R.id.btnReload)
+        val btnGo = findViewById<Button>(R.id.btnGo)
+        val btnDesktop = findViewById<Button>(R.id.btnDesktop)
+        val btnSettings = findViewById<Button>(R.id.btnSettings)
+        val btnCheckUpdate = findViewById<Button>(R.id.btnCheckUpdate)
 
-        val btnGo = Button(this).apply {
-            text = "Go"
-            isFocusable = true
-            isFocusableInTouchMode = true
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#2563eb"))
-            setOnClickListener { loadTypedUrl() }
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(12, 0, 0, 0)
-            }
+        // Button Click Listeners
+        btnBack.setOnClickListener {
+            if (browserEngine.canGoBack()) browserEngine.goBack()
         }
-
-        urlBarLayout.addView(urlEditText)
-        urlBarLayout.addView(btnGo)
-
-        // Navigation & Action Toolbar Container
-        val toolbar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(Color.parseColor("#1e293b"))
-            setPadding(16, 8, 16, 8)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+        btnForward.setOnClickListener {
+            if (browserEngine.canGoForward()) browserEngine.goForward()
         }
-
-        fun createToolbarButton(label: String, onClick: () -> Unit): Button {
-            return Button(this).apply {
-                text = label
-                isFocusable = true
-                isFocusableInTouchMode = true
-                setTextColor(Color.WHITE)
-                setBackgroundColor(Color.parseColor("#334155"))
-                setPadding(16, 8, 16, 8)
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    setMargins(0, 0, 8, 0)
-                }
-                setOnClickListener { onClick() }
-            }
-        }
-
-        val btnBack = createToolbarButton("◄ Back") {
-            if (browserEngine.view.canGoBack()) browserEngine.view.goBack()
-        }
-        val btnForward = createToolbarButton("Forward ►") {
-            if (browserEngine.view.canGoForward()) browserEngine.view.goForward()
-        }
-        val btnRefresh = createToolbarButton("↻ Refresh") {
-            browserEngine.reload()
-        }
-        val btnHome = createToolbarButton("🏠 Home") {
+        btnHome.setOnClickListener {
             loadUrlAndSync("https://html.duckduckgo.com")
         }
-        val btnSettings = createToolbarButton("⚙ Settings") {
+        btnReload.setOnClickListener {
+            browserEngine.reload()
+        }
+        btnGo.setOnClickListener {
+            loadTypedUrl()
+        }
+        btnDesktop.setOnClickListener {
+            isDesktopMode = !isDesktopMode
+            browserEngine.setDesktopMode(isDesktopMode)
+            val modeText = if (isDesktopMode) "Desktop" else "Mobile"
+            Toast.makeText(this, "Switched to $modeText mode", Toast.LENGTH_SHORT).show()
+        }
+        btnSettings.setOnClickListener {
             showSettingsDialog()
         }
+        btnCheckUpdate.setOnClickListener {
+            checkForUpdates(manualCheck = true)
+        }
 
-        toolbar.addView(btnBack)
-        toolbar.addView(btnForward)
-        toolbar.addView(btnRefresh)
-        toolbar.addView(btnHome)
-        toolbar.addView(btnSettings)
+        // URL EditText IME Action Listener
+        etUrlBar.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
+                loadTypedUrl()
+                true
+            } else {
+                false
+            }
+        }
 
-        // Assemble Layout
-        rootLayout.addView(urlBarLayout)
-        rootLayout.addView(toolbar)
-        rootLayout.addView(
-            browserEngine.view,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.MATCH_PARENT
-            )
-        )
-        setContentView(rootLayout)
-
-        // 4. Start Tailscale Debug Web Server on Port 8080
+        // 3. Start Tailscale Debug Web Server on Port 8080
         debugServer = TvDebugServer(
             port = 8080,
             onNavigate = { url ->
@@ -198,15 +133,15 @@ class MainActivity : ComponentActivity() {
         )
         debugServer.start()
 
-        // 5. Check for OTA Updates automatically on launch
-        checkForUpdates()
+        // 4. Check for OTA Updates automatically on launch
+        checkForUpdates(manualCheck = false)
 
-        // 6. Load initial homepage
+        // 5. Load initial homepage
         loadUrlAndSync("https://html.duckduckgo.com")
     }
 
     private fun loadTypedUrl() {
-        var target = urlEditText.text.toString().trim()
+        var target = etUrlBar.text.toString().trim()
         if (target.isNotEmpty()) {
             if (!target.startsWith("http://") && !target.startsWith("https://")) {
                 target = "https://html.duckduckgo.com/html?q=$target"
@@ -216,11 +151,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun loadUrlAndSync(url: String) {
-        urlEditText.setText(url)
+        etUrlBar.setText(url)
         browserEngine.loadUrl(url)
     }
 
-    private fun checkForUpdates() {
+    private fun checkForUpdates(manualCheck: Boolean) {
         thread {
             try {
                 val updateJsonStr = NetworkClient.fetchText("https://raw.githubusercontent.com/jch0029987-glitch/TV-web-wrapper/main/version.json")
@@ -249,10 +184,23 @@ class MainActivity : ComponentActivity() {
                                 .setNegativeButton("Later", null)
                                 .show()
                         }
+                    } else if (manualCheck) {
+                        runOnUiThread {
+                            Toast.makeText(this, "You are already on the latest version.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } else if (manualCheck) {
+                    runOnUiThread {
+                        Toast.makeText(this, "Failed to check for updates.", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
                 DebugConsoleStore.addLog("[JAVA ERROR] OTA Update check failed: ${e.message}")
+                if (manualCheck) {
+                    runOnUiThread {
+                        Toast.makeText(this, "Error checking updates: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         }
     }
@@ -264,14 +212,13 @@ class MainActivity : ComponentActivity() {
                 return true
             }
             KeyEvent.KEYCODE_PROG_RED -> {
-                // Toggle virtual mouse cursor via remote red button
                 isCursorActive = !isCursorActive
                 val status = if (isCursorActive) "ON" else "OFF"
+                tvModeHud.text = "Mode: " + if (isCursorActive) "Cursor" else "Scroll"
                 Toast.makeText(this, "Virtual Mouse: $status", Toast.LENGTH_SHORT).show()
                 browserEngine.evaluateJavascript("if(window.setCursorVisible) window.setCursorVisible($isCursorActive);", null)
                 return true
             }
-            // Custom Key Mappings for Media / Colored Buttons
             KeyEvent.KEYCODE_PROG_GREEN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                 Toast.makeText(this, "Custom Action Triggered", Toast.LENGTH_SHORT).show()
                 return true
@@ -338,7 +285,7 @@ class MainActivity : ComponentActivity() {
     private fun showKeyMappingDialog() {
         AlertDialog.Builder(this)
             .setTitle("Custom Button Mapping")
-            .setMessage("• Red Remote Button: Toggle Virtual Mouse\n• Green / Play-Pause: Custom Action Shortcut\n• Menu / Settings: Opens Settings Dialog\n• D-Pad (when mouse active): Steers Virtual Cursor")
+            .setMessage("• Red Remote Button: Toggle Virtual Mouse / Scroll Mode\n• Green / Play-Pause: Custom Action Shortcut\n• Menu / Settings: Opens Settings Dialog\n• D-Pad (when mouse active): Steers Virtual Cursor")
             .setPositiveButton("OK", null)
             .show()
     }
