@@ -4,6 +4,7 @@ import android.app.AlertDialog
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
+import android.webkit.JavascriptInterface
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -54,6 +55,9 @@ class MainActivity : ComponentActivity() {
                 Toast.makeText(this, "Download triggered: $url", Toast.LENGTH_SHORT).show()
             }
         )
+
+        // Expose keyboard input bridge to WebView
+        browserEngine.addJavascriptInterface(KeyboardBridgeInterface(), "nativeBridge")
 
         val webViewContainer = findViewById<FrameLayout>(R.id.webViewContainer)
         webViewContainer.addView(browserEngine.view)
@@ -107,8 +111,33 @@ class MainActivity : ComponentActivity() {
         )
         debugServer.start()
 
+        // 4. Run background OTA update check on startup
         checkForUpdates(manualCheck = false)
         loadUrlAndSync("https://html.duckduckgo.com")
+    }
+
+    inner class KeyboardBridgeInterface {
+        @JavascriptInterface
+        fun onKeyboardInput(text: String, isBackspace: Boolean) {
+            runOnUiThread {
+                if (isBackspace) {
+                    val currentText = etUrlBar.text.toString()
+                    if (currentText.isNotEmpty()) {
+                        etUrlBar.setText(currentText.dropLast(1))
+                        etUrlBar.setSelection(etUrlBar.text.length)
+                    }
+                } else {
+                    etUrlBar.append(text)
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun submitToolbar() {
+            runOnUiThread {
+                loadTypedUrl()
+            }
+        }
     }
 
     private fun loadTypedUrl() {
@@ -170,6 +199,12 @@ class MainActivity : ComponentActivity() {
             val customToggleKey = KeyMappingHelper.getMappedKey(this)
 
             when (keyCode) {
+                // Pressing Back jumps focus straight to the toolbar
+                KeyEvent.KEYCODE_BACK -> {
+                    etUrlBar.requestFocus()
+                    Toast.makeText(this, "Toolbar Focused", Toast.LENGTH_SHORT).show()
+                    return true
+                }
                 KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS -> {
                     showSettingsDialog()
                     return true
@@ -183,11 +218,20 @@ class MainActivity : ComponentActivity() {
                     browserEngine.evaluateJavascript("window.setCursorVisible($isCursorActive);", null)
                     return true
                 }
-                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, 
+                KeyEvent.KEYCODE_DPAD_UP -> {
+                    if (isCursorActive) {
+                        browserEngine.evaluateJavascript("window.tvStartMotion(0, -12);", null)
+                        return true
+                    } else {
+                        // Jump up to toolbar buttons when at the top of scroll mode
+                        etUrlBar.requestFocus()
+                        return true
+                    }
+                }
+                KeyEvent.KEYCODE_DPAD_DOWN, 
                 KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                     if (isCursorActive) {
                         when (keyCode) {
-                            KeyEvent.KEYCODE_DPAD_UP -> browserEngine.evaluateJavascript("window.tvStartMotion(0, -12);", null)
                             KeyEvent.KEYCODE_DPAD_DOWN -> browserEngine.evaluateJavascript("window.tvStartMotion(0, 12);", null)
                             KeyEvent.KEYCODE_DPAD_LEFT -> browserEngine.evaluateJavascript("window.tvStartMotion(-12, 0);", null)
                             KeyEvent.KEYCODE_DPAD_RIGHT -> browserEngine.evaluateJavascript("window.tvStartMotion(12, 0);", null)
@@ -197,6 +241,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         } else if (event.action == KeyEvent.ACTION_UP) {
+            if (keyCode == KeyEvent.KEYCODE_BACK) {
+                return true
+            }
+
             if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_BUTTON_A) {
                 if (!hasTriggeredLongPress) {
                     if (isCursorActive) {
