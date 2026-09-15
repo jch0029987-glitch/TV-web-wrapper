@@ -3,11 +3,11 @@
     window.__tvWrapperInjected = true;
 
     window.isCursorActive = false;
+    window.isWebTypingActive = false; // Explicit toggle based on user click
     let cursorX = window.innerWidth / 2;
     let cursorY = window.innerHeight / 2;
     let motionIntervalX = null;
     let motionIntervalY = null;
-    let forcedTextField = null; // Tracks explicit user input selection
 
     // 1. Virtual Mouse Cursor Setup
     const cursor = document.createElement('div');
@@ -23,6 +23,9 @@
     window.setCursorVisible = function(visible) {
         window.isCursorActive = visible;
         cursor.style.display = visible ? 'block' : 'none';
+        if (!visible) {
+            window.isWebTypingActive = false; // Reset typing mode when hiding cursor
+        }
     };
 
     // 2. Motion Engine
@@ -43,7 +46,8 @@
             return;
         }
 
-        if (!isAnyTextFieldActive()) {
+        // If web typing mode is NOT active, allow D-pad scrolling/motion
+        if (!window.isWebTypingActive) {
             if (dx !== 0 && !motionIntervalX) motionIntervalX = setInterval(() => executeMotion(dx, 0), 25);
             if (dy !== 0 && !motionIntervalY) motionIntervalY = setInterval(() => executeMotion(0, dy), 25);
         }
@@ -54,20 +58,7 @@
         if (axis === 'y' && motionIntervalY) { clearInterval(motionIntervalY); motionIntervalY = null; }
     };
 
-    // 3. Reliable Input Detection Helper
-    function isAnyTextFieldActive() {
-        const activeEl = document.activeElement;
-        const isFocusedInput = activeEl && (
-            activeEl.tagName === 'INPUT' || 
-            activeEl.tagName === 'TEXTAREA' || 
-            activeEl.isContentEditable ||
-            activeEl.getAttribute('role') === 'textbox'
-        );
-        // Fallback to forcedTextField if WebView window focus dropped the activeElement state
-        return isFocusedInput || (forcedTextField && document.contains(forcedTextField));
-    }
-
-    // 4. Bulletproof Click Simulation for Login Fields
+    // 3. Explicit Click-to-Activate Typing Mode
     window.clickCursor = function() {
         if (!window.isCursorActive) return;
 
@@ -83,7 +74,7 @@
 
             const actualTarget = inputTarget || target;
 
-            // Dispatch realistic touch and mouse sequences
+            // Dispatch touch and mouse events for framework compatibility
             const touchObj = new Touch({
                 identifier: Date.now(), target: actualTarget,
                 clientX: cursorX, clientY: cursorY, screenX: cursorX, screenY: cursorY,
@@ -98,7 +89,8 @@
             });
 
             if (inputTarget) {
-                forcedTextField = inputTarget; // Lock this field down manually
+                // Explicitly lock into web typing mode on click
+                window.isWebTypingActive = true;
                 inputTarget.focus();
                 setTimeout(() => {
                     inputTarget.focus();
@@ -111,7 +103,8 @@
                     window.nativeBridge.requestWebViewFocus();
                 }
             } else {
-                forcedTextField = null;
+                // Clicking non-input elements exits web typing mode
+                window.isWebTypingActive = false;
                 if (typeof target.focus === 'function') target.focus();
             }
         }
@@ -121,26 +114,19 @@
         if (window.isCursorActive) window.clickCursor();
     };
 
-    // Clear manual lock if user clicks somewhere else standard
-    document.addEventListener('click', (e) => {
-        if (!e.target.matches('input, textarea, [contenteditable="true"], [role="textbox"]')) {
-            forcedTextField = null;
-        }
-    }, true);
-
-    // 5. Hardened Keystroke Routing Guard
+    // 4. Clean Keystroke Routing based purely on explicit click state
     window.addEventListener('keydown', function(event) {
         if (event.key === 'F5' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r')) {
             event.preventDefault();
             return;
         }
 
-        // If an input field is active or manually tracked, let the web page handle the key completely
-        if (isAnyTextFieldActive()) {
+        // If explicitly in web typing mode via click, let the web page handle keys completely
+        if (window.isWebTypingActive) {
             return; 
         }
 
-        // Otherwise, safely pipe into the native toolbar
+        // Otherwise, route straight to the native toolbar
         if (window.nativeBridge && typeof window.nativeBridge.onKeyboardInput === 'function') {
             if (event.key === 'Backspace') {
                 window.nativeBridge.onKeyboardInput('', true);
