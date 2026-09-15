@@ -1,7 +1,6 @@
 package com.example.messengerwrapper
 
 import android.app.AlertDialog
-import android.content.Context
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
@@ -24,6 +23,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var tvModeHud: TextView
     private var isCursorActive = false
     private var isDesktopMode = false
+
+    // Long-press tracking variables for D-pad Center toggle
+    private var dpadCenterDownTime: Long = 0
+    private var hasTriggeredLongPress = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -142,71 +145,83 @@ class MainActivity : ComponentActivity() {
         Toast.makeText(this, "Cache Cleared", Toast.LENGTH_SHORT).show()
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        // Fetch custom mapped toggle key from KeyMappingHelper
-        val customToggleKey = KeyMappingHelper.getMappedKey(this)
+    override fun dispatchKeyEvent(event: KeyEvent?): Boolean {
+        if (event == null) return super.dispatchKeyEvent(event)
 
-        when (keyCode) {
-            KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS -> {
-                showSettingsDialog()
-                return true
-            }
-            // D-pad Center / Enter triggers intelligent mouse click or input focusing
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
-                if (isCursorActive) {
-                    browserEngine.evaluateJavascript("if(window.handleEnterPress) { window.handleEnterPress(); } else { window.clickCursor(); }", null)
-                } else {
-                    isCursorActive = true
-                    tvModeHud.text = "Mode: Cursor"
-                    val mappedKey = KeyMappingHelper.getMappedKey(this)
-                    Toast.makeText(this, "Virtual Mouse: ON (Mapped Key: $mappedKey)", Toast.LENGTH_SHORT).show()
-                    browserEngine.evaluateJavascript("window.setCursorVisible(true);", null)
-                }
-                return true
-            }
-            // Fallback shortcuts and custom mapped remote key
-            KeyEvent.KEYCODE_STAR, 
-            KeyEvent.KEYCODE_TV_INPUT, 
-            KeyEvent.KEYCODE_MUTE, 
-            customToggleKey -> {
-                isCursorActive = !isCursorActive
-                val status = if (isCursorActive) "ON" else "OFF"
-                tvModeHud.text = "Mode: " + if (isCursorActive) "Cursor" else "Scroll"
-                val mappedKey = KeyMappingHelper.getMappedKey(this)
-                Toast.makeText(this, "Virtual Mouse: $status (Mapped Key: $mappedKey)", Toast.LENGTH_SHORT).show()
-                browserEngine.evaluateJavascript("window.setCursorVisible($isCursorActive);", null)
-                return true
-            }
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, 
-            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                if (isCursorActive) {
-                    when (keyCode) {
-                        KeyEvent.KEYCODE_DPAD_UP -> browserEngine.evaluateJavascript("window.tvStartMotion(0, -12);", null)
-                        KeyEvent.KEYCODE_DPAD_DOWN -> browserEngine.evaluateJavascript("window.tvStartMotion(0, 12);", null)
-                        KeyEvent.KEYCODE_DPAD_LEFT -> browserEngine.evaluateJavascript("window.tvStartMotion(-12, 0);", null)
-                        KeyEvent.KEYCODE_DPAD_RIGHT -> browserEngine.evaluateJavascript("window.tvStartMotion(12, 0);", null)
-                    }
+        val keyCode = event.keyCode
+
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            // Track D-pad Center / Enter long-press for toggling mouse mode
+            if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_BUTTON_A) {
+                if (event.repeatCount == 0) {
+                    dpadCenterDownTime = System.currentTimeMillis()
+                    hasTriggeredLongPress = false
+                } else if (System.currentTimeMillis() - dpadCenterDownTime >= 800 && !hasTriggeredLongPress) {
+                    hasTriggeredLongPress = true
+                    isCursorActive = !isCursorActive
+                    val status = if (isCursorActive) "ON" else "OFF"
+                    tvModeHud.text = "Mode: " + if (isCursorActive) "Cursor" else "Scroll"
+                    Toast.makeText(this, "Virtual Mouse: $status", Toast.LENGTH_SHORT).show()
+                    browserEngine.evaluateJavascript("window.setCursorVisible($isCursorActive);", null)
                     return true
                 }
             }
-        }
-        return super.onKeyDown(keyCode, event)
-    }
 
-    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-        if (isCursorActive) {
+            val customToggleKey = KeyMappingHelper.getMappedKey(this)
+
             when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    browserEngine.evaluateJavascript("window.tvStopMotion('y');", null)
+                KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS -> {
+                    showSettingsDialog()
                     return true
                 }
-                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    browserEngine.evaluateJavascript("window.tvStopMotion('x');", null)
+                customToggleKey -> {
+                    isCursorActive = !isCursorActive
+                    val status = if (isCursorActive) "ON" else "OFF"
+                    tvModeHud.text = "Mode: " + if (isCursorActive) "Cursor" else "Scroll"
+                    val mappedKey = KeyMappingHelper.getMappedKey(this)
+                    Toast.makeText(this, "Virtual Mouse: $status (Mapped Key: $mappedKey)", Toast.LENGTH_SHORT).show()
+                    browserEngine.evaluateJavascript("window.setCursorVisible($isCursorActive);", null)
                     return true
+                }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, 
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (isCursorActive) {
+                        when (keyCode) {
+                            KeyEvent.KEYCODE_DPAD_UP -> browserEngine.evaluateJavascript("window.tvStartMotion(0, -12);", null)
+                            KeyEvent.KEYCODE_DPAD_DOWN -> browserEngine.evaluateJavascript("window.tvStartMotion(0, 12);", null)
+                            KeyEvent.KEYCODE_DPAD_LEFT -> browserEngine.evaluateJavascript("window.tvStartMotion(-12, 0);", null)
+                            KeyEvent.KEYCODE_DPAD_RIGHT -> browserEngine.evaluateJavascript("window.tvStartMotion(12, 0);", null)
+                        }
+                        return true
+                    }
+                }
+            }
+        } else if (event.action == KeyEvent.ACTION_UP) {
+            if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_BUTTON_A) {
+                if (!hasTriggeredLongPress) {
+                    if (isCursorActive) {
+                        browserEngine.evaluateJavascript("if(window.handleEnterPress) { window.handleEnterPress(); } else { window.clickCursor(); }", null)
+                    } else {
+                        return super.dispatchKeyEvent(event)
+                    }
+                }
+                return true
+            }
+
+            if (isCursorActive) {
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        browserEngine.evaluateJavascript("window.tvStopMotion('y');", null)
+                        return true
+                    }
+                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        browserEngine.evaluateJavascript("window.tvStopMotion('x');", null)
+                        return true
+                    }
                 }
             }
         }
-        return super.onKeyUp(keyCode, event)
+        return super.dispatchKeyEvent(event)
     }
 
     private fun showSettingsDialog() {
