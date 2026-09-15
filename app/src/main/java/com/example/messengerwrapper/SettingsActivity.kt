@@ -40,6 +40,8 @@ class SettingsActivity : AppCompatActivity() {
         switchGeckoEngine.isChecked = prefs.getBoolean("use_gecko", true)
         switchAdBlock.isChecked = prefs.getBoolean("ad_block", true)
         switchDesktopDefault.isChecked = prefs.getBoolean("desktop_default", true)
+        
+        // Fetch using our KeyMappingHelper
         capturedKeyCode = KeyMappingHelper.getMappedKey(this)
 
         switchGeckoEngine.setOnCheckedChangeListener { _, isChecked ->
@@ -84,6 +86,7 @@ class SettingsActivity : AppCompatActivity() {
         dialog.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN) {
                 capturedKeyCode = keyCode
+                // Save using our KeyMappingHelper
                 KeyMappingHelper.saveMappedKey(this, capturedKeyCode)
                 Toast.makeText(this, "Button mapped successfully ($keyCode)", Toast.LENGTH_SHORT).show()
                 dialog.dismiss()
