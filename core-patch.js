@@ -95,7 +95,7 @@
         }
     };
 
-    // 4. Click Simulation & Smart Text Selection
+    // 4. Enhanced Click Simulation & Focus Locking for SPAs (Facebook, etc.)
     window.clickCursor = function() {
         if (!window.isCursorActive) return;
 
@@ -106,8 +106,8 @@
 
         const target = document.elementFromPoint(cursorX, cursorY);
         if (target) {
-            // Dispatch standard mouse events for regular elements
-            ['mousedown', 'mouseup', 'click'].forEach(eventType => {
+            // Dispatch Pointer Events and Mouse Events so React/Vue frameworks recognize the interaction
+            ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(eventType => {
                 const event = new MouseEvent(eventType, {
                     view: window,
                     bubbles: true,
@@ -119,16 +119,18 @@
                 target.dispatchEvent(event);
             });
 
-            // Specific check for text inputs / textareas / contenteditable fields
+            // Target input field logic with focus locking
             const isInputTarget = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
             if (isInputTarget) {
+                // Force focus and schedule a secondary reinforcement check for React re-renders
                 target.focus();
-                
-                // If it's a standard text/search input, also select its existing text content for easy overriding
-                if (typeof target.select === 'function' && (/^(text|search|url|tel|password|email)$/i.test(target.type) || !target.type)) {
-                    target.select();
-                }
+                setTimeout(() => {
+                    target.focus();
+                    if (typeof target.select === 'function' && (/^(text|search|url|tel|password|email)$/i.test(target.type) || !target.type)) {
+                        target.select();
+                    }
+                }, 50);
 
                 // Shift native Android focus into the WebView so hardware keyboard types into the page
                 if (window.nativeBridge && typeof window.nativeBridge.requestWebViewFocus === 'function') {
