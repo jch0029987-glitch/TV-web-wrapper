@@ -41,5 +41,18 @@
         enforceMobileViewport();
     }
 
-    console.log("Facebook Mobile-Auth Mode Initialized (No Loops).");
+    // Neutralize Facebook's aggressive SPA refresh/redirect loops
+    try {
+        const preventLoop = (fnName) => {
+            const original = history[fnName];
+            history[fnName] = function(...args) {
+                console.log(`Blocked history.${fnName} reload loop:`, args[2]);
+                return;
+            };
+        };
+        preventLoop('replaceState');
+        preventLoop('pushState');
+    } catch (e) {}
+
+    console.log("Facebook Mobile-Auth Anti-Loop Mode Initialized.");
 })();
