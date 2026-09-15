@@ -95,7 +95,7 @@
         }
     };
 
-    // 4. Click Simulation & Smart Focus Shifting
+    // 4. Click Simulation & Smart Text Selection
     window.clickCursor = function() {
         if (!window.isCursorActive) return;
 
@@ -106,6 +106,7 @@
 
         const target = document.elementFromPoint(cursorX, cursorY);
         if (target) {
+            // Dispatch standard mouse events for regular elements
             ['mousedown', 'mouseup', 'click'].forEach(eventType => {
                 const event = new MouseEvent(eventType, {
                     view: window,
@@ -118,9 +119,18 @@
                 target.dispatchEvent(event);
             });
 
-            // If it's a text input element, focus it and pull native Android focus into the WebView
-            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+            // Specific check for text inputs / textareas / contenteditable fields
+            const isInputTarget = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+            if (isInputTarget) {
                 target.focus();
+                
+                // If it's a standard text/search input, also select its existing text content for easy overriding
+                if (typeof target.select === 'function' && (/^(text|search|url|tel|password|email)$/i.test(target.type) || !target.type)) {
+                    target.select();
+                }
+
+                // Shift native Android focus into the WebView so hardware keyboard types into the page
                 if (window.nativeBridge && typeof window.nativeBridge.requestWebViewFocus === 'function') {
                     window.nativeBridge.requestWebViewFocus();
                 }
@@ -136,7 +146,7 @@
         }
     };
 
-    // Also catch automatic/tab-based webpage text field focus changes
+    // Catch automatic/tab-based webpage text field focus changes
     document.addEventListener('focusin', function(event) {
         const target = event.target;
         if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
