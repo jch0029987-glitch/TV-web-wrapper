@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
             }
         )
 
-        // Expose keyboard input bridge to WebView
+        // Expose keyboard input bridge safely via WebViewEngine wrapper
         browserEngine.addJavascriptInterface(KeyboardBridgeInterface(), "nativeBridge")
 
         val webViewContainer = findViewById<FrameLayout>(R.id.webViewContainer)
