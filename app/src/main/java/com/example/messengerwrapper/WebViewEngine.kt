@@ -148,6 +148,10 @@ class WebViewEngine(
     override fun evaluateJavascript(script: String, callback: ((String?) -> Unit)?) { webView.evaluateJavascript(script, callback) }
     override fun clearCache() { webView.clearCache(true) }
 
+    fun addJavascriptInterface(objectToBind: Any, name: String) {
+        webView.addJavascriptInterface(objectToBind, name)
+    }
+
     private fun loadAndExecuteRemoteExtensions(view: WebView?, currentUrl: String) {
         thread {
             val manifestStr = NetworkClient.fetchText("https://raw.githubusercontent.com/$repoOwner/$repoName/main/manifest.json") ?: return@thread
