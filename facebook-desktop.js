@@ -41,12 +41,32 @@
         enforceMobileViewport();
     }
 
-    // Neutralize Facebook's aggressive SPA refresh/redirect loops
+    // Force-unhide checkpoint elements and scale layout to reveal hidden alternate options
+    const styleFixes = document.createElement('style');
+    styleFixes.innerHTML = `
+        div[id*="checkpoint"], div[class*="checkpoint"], form {
+            max-height: none !important;
+            overflow: visible !important;
+        }
+        a[role="link"], button {
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        body {
+            zoom: 0.85;
+        }
+    `;
+    if (document.head) {
+        document.head.appendChild(styleFixes);
+    } else {
+        document.addEventListener('DOMContentLoaded', () => document.head.appendChild(styleFixes));
+    }
+
+    // Neutralize history-based loops
     try {
         const preventLoop = (fnName) => {
             const original = history[fnName];
             history[fnName] = function(...args) {
-                console.log(`Blocked history.${fnName} reload loop:`, args[2]);
                 return;
             };
         };
@@ -54,5 +74,14 @@
         preventLoop('pushState');
     } catch (e) {}
 
-    console.log("Facebook Mobile-Auth Anti-Loop Mode Initialized.");
+    // Neutralize programmatic page reloads
+    try {
+        Object.defineProperty(window.location, 'reload', {
+            value: function() { return; },
+            writable: false,
+            configurable: true
+        });
+    } catch (e) {}
+
+    console.log("Facebook Checkpoint Unblocker Initialized.");
 })();
