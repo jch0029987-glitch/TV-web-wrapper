@@ -52,7 +52,7 @@ jobs:
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
     - name: Run Emulator & Check for Errors
-      uses: reactivecircus/android-emulator-runner@v3
+      uses: reactivecircus/android-emulator-runner@v2
       with:
         api-level: 34
         target: google_apis
