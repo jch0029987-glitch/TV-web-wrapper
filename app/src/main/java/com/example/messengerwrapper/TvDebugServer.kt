@@ -58,7 +58,7 @@ class TvDebugServer(
             val logHtml = if (logs.isEmpty()) {
                 "<p style='color: #888;'>No logs recorded yet.</p>"
             } else {
-                logs.joinToString("<br>") { line ->
+                logs.joinToString("<br>") { line: String ->
                     val escaped = line.replace("<", "&lt;").replace(">", "&gt;")
                     if (escaped.contains("CRASH") || escaped.contains("ERROR")) {
                         "<span style='color: #f43f5e;'>$escaped</span>"
