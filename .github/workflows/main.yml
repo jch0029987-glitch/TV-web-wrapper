@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   test-and-verify:
-    runs-on: macos-latest # macOS provides hardware acceleration for fast Android emulator execution
+    runs-on: macos-latest
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
@@ -24,6 +24,12 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
         cache: 'gradle'
+
+    - name: Install Gradle
+      run: brew install gradle
+
+    - name: Generate Gradle Wrapper
+      run: gradle wrapper --gradle-version 8.5
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
@@ -46,32 +52,26 @@ jobs:
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
     - name: Run Emulator & Check for Errors
-      uses: reactivecircus/android-emulator-runner@v4
+      uses: reactivecircus/android-emulator-runner@v3
       with:
         api-level: 34
         target: google_apis
         arch: x86_64
         profile: tv_1080p
         script: |
-          # 1. Clear logcat and stream logs to a file in the background
           adb logcat -c
           adb logcat -v time > logcat_output.txt &
           LOGCAT_PID=$!
 
-          # 2. Install the signed release APK
           adb install -r app/build/outputs/apk/release/app-release.apk
 
-          # 3. Launch the app
           echo "Launching app..."
           adb shell am start -n com.example.messengerwrapper/.MainActivity
 
-          # 4. Wait for initialization and WebView rendering
           sleep 12
 
-          # 5. Stop logcat background process
           kill $LOGCAT_PID || true
 
-          # 6. Check if process is still alive (guards against SIG 9 / silent exits)
           if ! adb shell pidof com.example.messengerwrapper; then
             echo "=========================================="
             echo "❌ ERROR: App process died or was killed (SIG 9)!"
@@ -80,7 +80,6 @@ jobs:
             exit 1
           fi
 
-          # 7. Scan logcat for fatal exceptions, crashes, or native errors
           if grep -E -i "fatal|androidruntime|sig: 9|killed|unhandled exception|unsatisfiedlinkerror" logcat_output.txt; then
             echo "=========================================="
             echo "❌ ERROR: Crash signatures found in logcat!"
@@ -94,7 +93,7 @@ jobs:
           echo "=========================================="
 
   release:
-    needs: test-and-verify # Only runs if the emulator test passes completely without errors
+    needs: test-and-verify
     runs-on: ubuntu-latest
 
     steps:
@@ -109,6 +108,12 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
         cache: 'gradle'
+
+    - name: Install Gradle
+      run: sudo apt-get update && sudo apt-get install -y gradle
+
+    - name: Generate Gradle Wrapper
+      run: gradle wrapper --gradle-version 8.5
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
