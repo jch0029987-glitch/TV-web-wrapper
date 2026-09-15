@@ -143,27 +143,28 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        val prefs = getSharedPreferences("CustomKeyMappings", Context.MODE_PRIVATE)
-        val customToggleKey = prefs.getInt("mouse_toggle_keycode", -1)
+        // Fetch custom mapped toggle key from KeyMappingHelper
+        val customToggleKey = KeyMappingHelper.getMappedKey(this)
 
         when (keyCode) {
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS -> {
                 showSettingsDialog()
                 return true
             }
-            // D-pad Center / Enter acts as the primary toggle and click handler
+            // D-pad Center / Enter triggers intelligent mouse click or input focusing
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
                 if (isCursorActive) {
                     browserEngine.evaluateJavascript("if(window.handleEnterPress) { window.handleEnterPress(); } else { window.clickCursor(); }", null)
                 } else {
                     isCursorActive = true
                     tvModeHud.text = "Mode: Cursor"
-                    Toast.makeText(this, "Virtual Mouse: ON", Toast.LENGTH_SHORT).show()
+                    val mappedKey = KeyMappingHelper.getMappedKey(this)
+                    Toast.makeText(this, "Virtual Mouse: ON (Mapped Key: $mappedKey)", Toast.LENGTH_SHORT).show()
                     browserEngine.evaluateJavascript("window.setCursorVisible(true);", null)
                 }
                 return true
             }
-            // Fallback remote shortcuts
+            // Fallback shortcuts and custom mapped remote key
             KeyEvent.KEYCODE_STAR, 
             KeyEvent.KEYCODE_TV_INPUT, 
             KeyEvent.KEYCODE_MUTE, 
@@ -171,7 +172,8 @@ class MainActivity : ComponentActivity() {
                 isCursorActive = !isCursorActive
                 val status = if (isCursorActive) "ON" else "OFF"
                 tvModeHud.text = "Mode: " + if (isCursorActive) "Cursor" else "Scroll"
-                Toast.makeText(this, "Virtual Mouse: $status", Toast.LENGTH_SHORT).show()
+                val mappedKey = KeyMappingHelper.getMappedKey(this)
+                Toast.makeText(this, "Virtual Mouse: $status (Mapped Key: $mappedKey)", Toast.LENGTH_SHORT).show()
                 browserEngine.evaluateJavascript("window.setCursorVisible($isCursorActive);", null)
                 return true
             }
@@ -179,10 +181,10 @@ class MainActivity : ComponentActivity() {
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 if (isCursorActive) {
                     when (keyCode) {
-                        KeyEvent.KEYCODE_DPAD_UP -> browserEngine.evaluateJavascript("window.moveCursor(0, -25);", null)
-                        KeyEvent.KEYCODE_DPAD_DOWN -> browserEngine.evaluateJavascript("window.moveCursor(0, 25);", null)
-                        KeyEvent.KEYCODE_DPAD_LEFT -> browserEngine.evaluateJavascript("window.moveCursor(-25, 0);", null)
-                        KeyEvent.KEYCODE_DPAD_RIGHT -> browserEngine.evaluateJavascript("window.moveCursor(25, 0);", null)
+                        KeyEvent.KEYCODE_DPAD_UP -> browserEngine.evaluateJavascript("window.tvStartMotion(0, -12);", null)
+                        KeyEvent.KEYCODE_DPAD_DOWN -> browserEngine.evaluateJavascript("window.tvStartMotion(0, 12);", null)
+                        KeyEvent.KEYCODE_DPAD_LEFT -> browserEngine.evaluateJavascript("window.tvStartMotion(-12, 0);", null)
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> browserEngine.evaluateJavascript("window.tvStartMotion(12, 0);", null)
                     }
                     return true
                 }
@@ -191,13 +193,29 @@ class MainActivity : ComponentActivity() {
         return super.onKeyDown(keyCode, event)
     }
 
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        if (isCursorActive) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    browserEngine.evaluateJavascript("window.tvStopMotion('y');", null)
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    browserEngine.evaluateJavascript("window.tvStopMotion('x');", null)
+                    return true
+                }
+            }
+        }
+        return super.onKeyUp(keyCode, event)
+    }
+
     private fun showSettingsDialog() {
         val options = arrayOf(
             "View History", 
             "Clear WebView Cache", 
             "Reload Extensions Cache", 
             "View Local Debug Logs",
-            "Map Mouse Toggle Button"
+            "Switch Navigation Mode (Scroll / Mouse)"
         )
         AlertDialog.Builder(this)
             .setTitle("Browser Settings")
@@ -207,35 +225,26 @@ class MainActivity : ComponentActivity() {
                     1 -> clearAppCache()
                     2 -> reloadExtensions()
                     3 -> showDebugLogsDialog()
-                    4 -> showKeyMappingDialog()
+                    4 -> showModeSelectionDialog()
                 }
             }
             .setNegativeButton("Close", null)
             .show()
     }
 
-    private fun showKeyMappingDialog() {
-        val prefs = getSharedPreferences("CustomKeyMappings", Context.MODE_PRIVATE)
-        val currentKey = prefs.getInt("mouse_toggle_keycode", -1)
-        
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("Map Mouse Toggle Button")
-            .setMessage("Current Mapped KeyCode: $currentKey\n\nPress any button on your remote now to assign it as the mouse toggle...")
-            .setNegativeButton("Cancel", null)
-            .create()
-
-        dialog.setOnKeyListener { _, keyCode, event ->
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                if (keyCode != KeyEvent.KEYCODE_BACK && keyCode != KeyEvent.KEYCODE_HOME) {
-                    prefs.edit().putInt("mouse_toggle_keycode", keyCode).apply()
-                    Toast.makeText(this, "Mouse toggle mapped to KeyCode: $keyCode", Toast.LENGTH_SHORT).show()
-                    dialog.dismiss()
-                    return@setOnKeyListener true
-                }
+    private fun showModeSelectionDialog() {
+        val modes = arrayOf("Scroll Mode (Page panning)", "Mouse Mode (Virtual cursor)")
+        AlertDialog.Builder(this)
+            .setTitle("Choose Navigation Mode")
+            .setItems(modes) { _, which ->
+                isCursorActive = (which == 1)
+                val statusText = if (isCursorActive) "Cursor" else "Scroll"
+                tvModeHud.text = "Mode: $statusText"
+                Toast.makeText(this, "Switched to $statusText Mode", Toast.LENGTH_SHORT).show()
+                browserEngine.evaluateJavascript("window.setCursorVisible($isCursorActive);", null)
             }
-            false
-        }
-        dialog.show()
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun checkForUpdates(manualCheck: Boolean) {
