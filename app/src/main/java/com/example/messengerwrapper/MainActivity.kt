@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
             }
         )
 
-        // Expose keyboard input bridge safely via WebViewEngine wrapper
+        // Expose keyboard & focus bridges safely via WebViewEngine wrapper
         browserEngine.addJavascriptInterface(KeyboardBridgeInterface(), "nativeBridge")
 
         val webViewContainer = findViewById<FrameLayout>(R.id.webViewContainer)
@@ -136,6 +136,14 @@ class MainActivity : ComponentActivity() {
         fun submitToolbar() {
             runOnUiThread {
                 loadTypedUrl()
+            }
+        }
+
+        // --- NEW: Shifts Android focus from the toolbar directly into the WebView ---
+        @JavascriptInterface
+        fun requestWebViewFocus() {
+            runOnUiThread {
+                browserEngine.view.requestFocus()
             }
         }
     }
