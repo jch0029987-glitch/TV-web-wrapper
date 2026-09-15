@@ -96,7 +96,7 @@
         }
     };
 
-    // 4. Enhanced Click Simulation with Deep Input Traversal for SPAs (Facebook, etc.)
+    // 4. Click Simulation with Direct Input Targeting for React SPAs
     window.clickCursor = function() {
         if (!window.isCursorActive) return;
 
@@ -107,7 +107,15 @@
 
         const target = document.elementFromPoint(cursorX, cursorY);
         if (target) {
-            // Dispatch standard interaction events
+            // Find underlying input element if clicked on a container wrapper
+            const inputTarget = target.matches('input, textarea, [contenteditable="true"], [role="textbox"]') 
+                ? target 
+                : target.querySelector('input, textarea, [contenteditable="true"], [role="textbox"]') 
+                || target.closest('input, textarea, [contenteditable="true"], [role="textbox"]');
+
+            const actualTarget = inputTarget || target;
+
+            // Dispatch pointer/mouse events directly on the actual input or target
             ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(eventType => {
                 const event = new MouseEvent(eventType, {
                     view: window,
@@ -117,17 +125,14 @@
                     clientY: cursorY,
                     button: 0
                 });
-                target.dispatchEvent(event);
+                actualTarget.dispatchEvent(event);
             });
-
-            // Find actual input element whether clicked directly or via a parent container wrapper
-            const inputTarget = target.matches('input, textarea, [contenteditable="true"], [role="textbox"]') 
-                ? target 
-                : target.querySelector('input, textarea, [contenteditable="true"], [role="textbox"]') 
-                || target.closest('input, textarea, [contenteditable="true"], [role="textbox"]');
 
             if (inputTarget) {
                 inputTarget.focus();
+                if (typeof inputTarget.click === 'function') {
+                    inputTarget.click();
+                }
                 setTimeout(() => {
                     inputTarget.focus();
                     if (typeof inputTarget.select === 'function' && (/^(text|search|url|tel|password|email)$/i.test(inputTarget.type) || !inputTarget.type)) {
@@ -135,7 +140,6 @@
                     }
                 }, 50);
 
-                // Shift native Android focus into WebView
                 if (window.nativeBridge && typeof window.nativeBridge.requestWebViewFocus === 'function') {
                     window.nativeBridge.requestWebViewFocus();
                 }
@@ -151,7 +155,6 @@
         }
     };
 
-    // Catch automatic/tab-based webpage text field focus changes
     document.addEventListener('focusin', function(event) {
         const target = event.target;
         if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable || target.getAttribute('role') === 'textbox')) {
@@ -161,8 +164,14 @@
         }
     }, true);
 
-    // 5. Intelligent Keyboard Routing
+    // 5. Intelligent Keyboard & Refresh Prevention Routing
     window.addEventListener('keydown', function(event) {
+        // Block accidental browser page refreshes (F5, Ctrl+R, Cmd+R)
+        if (event.key === 'F5' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r')) {
+            event.preventDefault();
+            return;
+        }
+
         const activeEl = document.activeElement;
         const isTextField = activeEl && (
             activeEl.tagName === 'INPUT' || 
