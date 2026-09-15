@@ -3,11 +3,13 @@
     window.__tvWrapperInjected = true;
 
     window.isCursorActive = false;
-    window.isWebTypingActive = false; // Explicit toggle based on user click
     let cursorX = window.innerWidth / 2;
     let cursorY = window.innerHeight / 2;
     let motionIntervalX = null;
     let motionIntervalY = null;
+    
+    // Persistent sticky lock for inputs to survive React re-renders
+    let lockedInputTarget = null; 
 
     // 1. Virtual Mouse Cursor Setup
     const cursor = document.createElement('div');
@@ -24,7 +26,7 @@
         window.isCursorActive = visible;
         cursor.style.display = visible ? 'block' : 'none';
         if (!visible) {
-            window.isWebTypingActive = false; // Reset typing mode when hiding cursor
+            lockedInputTarget = null; // Reset lock when cursor hides
         }
     };
 
@@ -46,8 +48,8 @@
             return;
         }
 
-        // If web typing mode is NOT active, allow D-pad scrolling/motion
-        if (!window.isWebTypingActive) {
+        // If a text input is locked, prevent D-pad from scrolling away
+        if (!lockedInputTarget) {
             if (dx !== 0 && !motionIntervalX) motionIntervalX = setInterval(() => executeMotion(dx, 0), 25);
             if (dy !== 0 && !motionIntervalY) motionIntervalY = setInterval(() => executeMotion(0, dy), 25);
         }
@@ -58,7 +60,7 @@
         if (axis === 'y' && motionIntervalY) { clearInterval(motionIntervalY); motionIntervalY = null; }
     };
 
-    // 3. Explicit Click-to-Activate Typing Mode
+    // 3. Sticky Click-to-Activate Logic
     window.clickCursor = function() {
         if (!window.isCursorActive) return;
 
@@ -89,13 +91,16 @@
             });
 
             if (inputTarget) {
-                // Explicitly lock into web typing mode on click
-                window.isWebTypingActive = true;
+                lockedInputTarget = inputTarget; // Permanently lock onto this input
                 inputTarget.focus();
+                
+                // Reinforce focus to counteract immediate React re-render drops
                 setTimeout(() => {
-                    inputTarget.focus();
-                    if (typeof inputTarget.select === 'function' && /^(text|search|url|tel|password|email)$/i.test(inputTarget.type || 'text')) {
-                        inputTarget.select();
+                    if (lockedInputTarget) {
+                        lockedInputTarget.focus();
+                        if (typeof lockedInputTarget.select === 'function' && /^(text|search|url|tel|password|email)$/i.test(lockedInputTarget.type || 'text')) {
+                            lockedInputTarget.select();
+                        }
                     }
                 }, 50);
 
@@ -103,8 +108,8 @@
                     window.nativeBridge.requestWebViewFocus();
                 }
             } else {
-                // Clicking non-input elements exits web typing mode
-                window.isWebTypingActive = false;
+                // If clicking outside an input, release the lock
+                lockedInputTarget = null;
                 if (typeof target.focus === 'function') target.focus();
             }
         }
@@ -114,19 +119,28 @@
         if (window.isCursorActive) window.clickCursor();
     };
 
-    // 4. Clean Keystroke Routing based purely on explicit click state
+    // Listen globally: if user clicks a non-input element anywhere, drop the lock
+    document.addEventListener('click', (e) => {
+        const clickedInput = e.target.matches('input, textarea, [contenteditable="true"], [role="textbox"]') 
+            || e.target.closest('input, textarea, [contenteditable="true"], [role="textbox"]');
+        if (!clickedInput) {
+            lockedInputTarget = null;
+        }
+    }, true);
+
+    // 4. Bulletproof Keydown Routing
     window.addEventListener('keydown', function(event) {
         if (event.key === 'F5' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r')) {
             event.preventDefault();
             return;
         }
 
-        // If explicitly in web typing mode via click, let the web page handle keys completely
-        if (window.isWebTypingActive) {
+        // If we have a locked input target attached to the document, trap all keystrokes locally
+        if (lockedInputTarget && document.contains(lockedInputTarget)) {
             return; 
         }
 
-        // Otherwise, route straight to the native toolbar
+        // Otherwise, safely pipe into the native toolbar
         if (window.nativeBridge && typeof window.nativeBridge.onKeyboardInput === 'function') {
             if (event.key === 'Backspace') {
                 window.nativeBridge.onKeyboardInput('', true);
