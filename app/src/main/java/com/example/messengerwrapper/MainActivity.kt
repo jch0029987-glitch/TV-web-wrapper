@@ -6,6 +6,7 @@ import android.view.KeyEvent
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import org.json.JSONObject
 import kotlin.concurrent.thread
 
 class MainActivity : ComponentActivity() {
@@ -18,7 +19,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // 1. Setup Global Native Exception & Crash Interceptor
+        // 1. Global crash & exception interceptor for dashboard streaming
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             val stackTrace = throwable.stackTraceToString()
@@ -29,6 +30,7 @@ class MainActivity : ComponentActivity() {
 
         nativeBridge = NativeBridge()
         
+        // 2. Initialize WebView Engine
         browserEngine = WebViewEngine(
             context = this,
             nativeBridge = nativeBridge,
@@ -49,7 +51,7 @@ class MainActivity : ComponentActivity() {
         }
         setContentView(container)
 
-        // 2. Start Tailscale Debug Web Server on Port 8080
+        // 3. Start Tailscale Debug Web Server on Port 8080
         debugServer = TvDebugServer(
             port = 8080,
             onNavigate = { url ->
@@ -75,8 +77,48 @@ class MainActivity : ComponentActivity() {
         )
         debugServer.start()
 
-        // 3. Load initial homepage
+        // 4. Check for OTA Updates automatically on launch
+        checkForUpdates()
+
+        // 5. Load initial homepage
         browserEngine.loadUrl("https://html.duckduckgo.com")
+    }
+
+    private fun checkForUpdates() {
+        thread {
+            try {
+                val updateJsonStr = NetworkClient.fetchText("https://raw.githubusercontent.com/jch0029987-glitch/TV-web-wrapper/main/version.json")
+                if (updateJsonStr != null) {
+                    val json = JSONObject(updateJsonStr)
+                    val latestVersionCode = json.getInt("versionCode")
+                    val apkUrl = json.getString("apkUrl")
+                    
+                    val packageInfo = packageManager.getPackageInfo(packageName, 0)
+                    val currentVersionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        packageInfo.longVersionCode.toInt()
+                    } else {
+                        @Suppress("DEPRECATION")
+                        packageInfo.versionCode
+                    }
+
+                    if (latestVersionCode > currentVersionCode) {
+                        runOnUiThread {
+                            AlertDialog.Builder(this)
+                                .setTitle("Update Available")
+                                .setMessage("A new version of the TV browser wrapper is available. Would you like to update now?")
+                                .setPositiveButton("Update") { _, _ ->
+                                    browserEngine.loadUrl(apkUrl)
+                                    Toast.makeText(this, "Downloading update...", Toast.LENGTH_SHORT).show()
+                                }
+                                .setNegativeButton("Later", null)
+                                .show()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                DebugConsoleStore.addLog("[JAVA ERROR] OTA Update check failed: ${e.message}")
+            }
+        }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -85,41 +127,34 @@ class MainActivity : ComponentActivity() {
                 showSettingsDialog()
                 return true
             }
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
-                if (isCursorActive) {
-                    browserEngine.evaluateJavascript("window.clickCursor();", null)
-                    return true
-                }
-            }
             KeyEvent.KEYCODE_PROG_RED -> {
-                // Toggle free-roaming mouse cursor mode via remote red button
                 isCursorActive = !isCursorActive
                 val status = if (isCursorActive) "ON" else "OFF"
-                Toast.makeText(this, "TV Mouse Cursor: $status", Toast.LENGTH_SHORT).show()
-                browserEngine.evaluateJavascript("window.setCursorVisible($isCursorActive);", null)
+                Toast.makeText(this, "Virtual Mouse: $status", Toast.LENGTH_SHORT).show()
+                browserEngine.evaluateJavascript("if(window.setCursorVisible) window.setCursorVisible($isCursorActive);", null)
                 return true
             }
-            KeyEvent.KEYCODE_DPAD_UP -> {
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, 
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, 
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
                 if (isCursorActive) {
-                    browserEngine.evaluateJavascript("window.tvScrollBy(0, -35);", null)
-                    return true
-                }
-            }
-            KeyEvent.KEYCODE_DPAD_DOWN -> {
-                if (isCursorActive) {
-                    browserEngine.evaluateJavascript("window.tvScrollBy(0, 35);", null)
-                    return true
-                }
-            }
-            KeyEvent.KEYCODE_DPAD_LEFT -> {
-                if (isCursorActive) {
-                    browserEngine.evaluateJavascript("window.tvScrollBy(-35, 0);", null)
-                    return true
-                }
-            }
-            KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                if (isCursorActive) {
-                    browserEngine.evaluateJavascript("window.tvScrollBy(35, 0);", null)
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
+                            browserEngine.evaluateJavascript("if(window.clickCursor) window.clickCursor();", null)
+                        }
+                        KeyEvent.KEYCODE_DPAD_UP -> {
+                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(0, -25); else window.tvScrollBy(0, -35);", null)
+                        }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(0, 25); else window.tvScrollBy(0, 35);", null)
+                        }
+                        KeyEvent.KEYCODE_DPAD_LEFT -> {
+                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(-25, 0); else window.tvScrollBy(-35, 0);", null)
+                        }
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(25, 0); else window.tvScrollBy(35, 0);", null)
+                        }
+                    }
                     return true
                 }
             }
