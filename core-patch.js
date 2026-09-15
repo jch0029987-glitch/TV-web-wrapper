@@ -1,5 +1,5 @@
-// core-patch.js - Global TV Cursor, Free-Roaming Mouse, and Edge-Scroll Engine
-console.log("TV Browser: core-patch.js loaded.");
+// core-patch.js - Accelerated TV Mouse & Pointer Engine
+console.log("TV Browser: core-patch.js loaded with accelerated cursor.");
 
 (function() {
     let cursorX = window.innerWidth / 2;
@@ -7,7 +7,12 @@ console.log("TV Browser: core-patch.js loaded.");
     let cursorVisible = false;
     let cursorEl = null;
 
-    // 1. Create Cursor Element
+    // Movement velocity state for smooth D-pad holding
+    let moveVelX = 0;
+    let moveVelY = 0;
+    let isMoving = false;
+    let animFrameId = null;
+
     function getOrCreateCursor() {
         if (cursorEl && document.body && document.body.contains(cursorEl)) return cursorEl;
 
@@ -25,7 +30,7 @@ console.log("TV Browser: core-patch.js loaded.");
         cursorEl.style.zIndex = '999999';
         cursorEl.style.display = 'none';
         cursorEl.style.transform = 'translate(-50%, -50%)';
-        cursorEl.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
+        cursorEl.style.boxShadow = '0 0 12px rgba(0,0,0,0.6)';
         
         if (document.body) {
             document.body.appendChild(cursorEl);
@@ -37,61 +42,57 @@ console.log("TV Browser: core-patch.js loaded.");
         return cursorEl;
     }
 
-    // Initialize early
     getOrCreateCursor();
 
-    // 2. Global Visibility Controller (called by MainActivity)
     window.setCursorVisible = function(visible) {
         cursorVisible = visible;
         const cursor = getOrCreateCursor();
         if (cursor) {
             cursor.style.display = visible ? 'block' : 'none';
             if (visible) {
-                // Keep current position or reset to center if out of bounds
                 cursorX = Math.max(10, Math.min(window.innerWidth - 10, cursorX));
                 cursorY = Math.max(10, Math.min(window.innerHeight - 10, cursorY));
                 updateCursorPosition();
+            } else {
+                stopMotion();
             }
         }
     };
 
     function updateCursorPosition() {
         if (!cursorEl) return;
-        cursorX = Math.max(10, Math.min(window.innerWidth - 10, cursorX));
-        cursorY = Math.max(10, Math.min(window.innerHeight - 10, cursorY));
+        cursorX = Math.max(5, Math.min(window.innerWidth - 5, cursorX));
+        cursorY = Math.max(5, Math.min(window.innerHeight - 5, cursorY));
         cursorEl.style.left = cursorX + 'px';
         cursorEl.style.top = cursorY + 'px';
     }
 
-    // 3. Free-Roaming Cursor & Edge-Scrolling Engine
-    window.tvScrollBy = function(dx, dy) {
-        if (cursorVisible) {
-            cursorX += dx;
-            cursorY += dy;
+    // Smooth continuous loop for D-pad navigation
+    function stepMotion() {
+        if (!cursorVisible) return;
 
-            const edgeThreshold = 90; // Distance from edge in pixels to trigger page scrolling
+        if (moveVelX !== 0 || moveVelY !== 0) {
+            cursorX += moveVelX;
+            cursorY += moveVelY;
+
+            // Edge-scrolling activation
+            const edgeThreshold = 80;
             let pageScrollX = 0;
             let pageScrollY = 0;
 
-            // Bottom edge scroll
-            if (cursorY > window.innerHeight - edgeThreshold && dy > 0) {
-                pageScrollY = dy * 1.5;
+            if (cursorY > window.innerHeight - edgeThreshold && moveVelY > 0) {
+                pageScrollY = moveVelY * 2;
                 cursorY = window.innerHeight - edgeThreshold;
-            }
-            // Top edge scroll
-            else if (cursorY < edgeThreshold && dy < 0) {
-                pageScrollY = dy * 1.5;
+            } else if (cursorY < edgeThreshold && moveVelY < 0) {
+                pageScrollY = moveVelY * 2;
                 cursorY = edgeThreshold;
             }
 
-            // Right edge scroll
-            if (cursorX > window.innerWidth - edgeThreshold && dx > 0) {
-                pageScrollX = dx * 1.5;
+            if (cursorX > window.innerWidth - edgeThreshold && moveVelX > 0) {
+                pageScrollX = moveVelX * 2;
                 cursorX = window.innerWidth - edgeThreshold;
-            }
-            // Left edge scroll
-            else if (cursorX < edgeThreshold && dx < 0) {
-                pageScrollX = dx * 1.5;
+            } else if (cursorX < edgeThreshold && moveVelX < 0) {
+                pageScrollX = moveVelX * 2;
                 cursorX = edgeThreshold;
             }
 
@@ -100,12 +101,47 @@ console.log("TV Browser: core-patch.js loaded.");
             }
 
             updateCursorPosition();
+        }
+
+        if (isMoving) {
+            animFrameId = requestAnimationFrame(stepMotion);
+        }
+    }
+
+    window.tvStartMotion = function(dx, dy) {
+        if (!cursorVisible) return;
+        moveVelX = dx;
+        moveVelY = dy;
+        if (!isMoving) {
+            isMoving = true;
+            animFrameId = requestAnimationFrame(stepMotion);
+        }
+    };
+
+    window.tvStopMotion = function(dir) {
+        // Stop specific axis or full stop
+        if (dir === 'x') moveVelX = 0;
+        if (dir === 'y') moveVelY = 0;
+        if (dir === 'all') {
+            moveVelX = 0;
+            moveVelY = 0;
+            isMoving = false;
+            if (animFrameId) cancelAnimationFrame(animFrameId);
+        }
+        if (moveVelX === 0 && moveVelY === 0) {
+            isMoving = false;
+        }
+    };
+
+    window.tvScrollBy = function(dx, dy) {
+        if (cursorVisible) {
+            window.tvStartMotion(dx, dy);
+            setTimeout(() => window.tvStopMotion('all'), 200);
         } else {
             window.scrollBy({ left: dx, top: dy, behavior: 'auto' });
         }
     };
 
-    // 4. Click Simulator at exact Cursor coordinates
     window.clickCursor = function() {
         if (!cursorVisible) return;
         const cursor = getOrCreateCursor();
@@ -128,10 +164,8 @@ console.log("TV Browser: core-patch.js loaded.");
         }
     };
 
-    // 5. Smart Enter Press Handler (Integrates with MainActivity)
     window.handleEnterPress = function() {
         if (!cursorVisible) return;
-        
         const cursor = getOrCreateCursor();
         if (!cursor) return;
 
@@ -140,13 +174,10 @@ console.log("TV Browser: core-patch.js loaded.");
         cursor.style.display = 'block';
 
         if (target) {
-            // If user hits enter on an input field or text area, focus it
             if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
                 target.focus();
                 return;
             }
-            
-            // Otherwise, trigger standard click sequence
             window.clickCursor();
         }
     };
