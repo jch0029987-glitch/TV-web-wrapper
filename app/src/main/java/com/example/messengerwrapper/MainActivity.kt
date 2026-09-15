@@ -1,9 +1,11 @@
 package com.example.messengerwrapper
 
 import android.app.AlertDialog
+import android.graphics.Color
 import android.os.Bundle
 import android.view.KeyEvent
-import android.widget.FrameLayout
+import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import org.json.JSONObject
@@ -42,16 +44,79 @@ class MainActivity : ComponentActivity() {
             }
         )
 
-        val container = FrameLayout(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
+        // 3. Build Main Layout with Toolbar & Buttons
+        val rootLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
             )
-            addView(browserEngine.view)
         }
-        setContentView(container)
 
-        // 3. Start Tailscale Debug Web Server on Port 8080
+        // Toolbar Container for TV Buttons
+        val toolbar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(Color.parseColor("#1e293b"))
+            setPadding(16, 12, 16, 12)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        // Helper to create TV-focusable action buttons
+        fun createToolbarButton(label: String, onClick: () -> Unit): Button {
+            return Button(this).apply {
+                text = label
+                isFocusable = true
+                isFocusableInTouchMode = true
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.parseColor("#334155"))
+                setPadding(20, 10, 20, 10)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    setMargins(0, 0, 12, 0)
+                }
+                setOnClickListener { onClick() }
+            }
+        }
+
+        val btnBack = createToolbarButton("◄ Back") {
+            if (browserEngine.view.canGoBack()) browserEngine.view.goBack()
+        }
+        val btnForward = createToolbarButton("Forward ►") {
+            if (browserEngine.view.canGoForward()) browserEngine.view.goForward()
+        }
+        val btnRefresh = createToolbarButton("↻ Refresh") {
+            browserEngine.reload()
+        }
+        val btnHome = createToolbarButton("🏠 Home") {
+            browserEngine.loadUrl("https://html.duckduckgo.com")
+        }
+        val btnSettings = createToolbarButton("⚙ Settings") {
+            showSettingsDialog()
+        }
+
+        toolbar.addView(btnBack)
+        toolbar.addView(btnForward)
+        toolbar.addView(btnRefresh)
+        toolbar.addView(btnHome)
+        toolbar.addView(btnSettings)
+
+        // Add Toolbar and WebView to Root Layout
+        rootLayout.addView(toolbar)
+        rootLayout.addView(
+            browserEngine.view,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        setContentView(rootLayout)
+
+        // 4. Start Tailscale Debug Web Server on Port 8080
         debugServer = TvDebugServer(
             port = 8080,
             onNavigate = { url ->
@@ -77,10 +142,10 @@ class MainActivity : ComponentActivity() {
         )
         debugServer.start()
 
-        // 4. Check for OTA Updates automatically on launch
+        // 5. Check for OTA Updates automatically on launch
         checkForUpdates()
 
-        // 5. Load initial homepage
+        // 6. Load initial homepage
         browserEngine.loadUrl("https://html.duckduckgo.com")
     }
 
