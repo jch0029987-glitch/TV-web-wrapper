@@ -136,7 +136,7 @@
         }
     };
 
-    // 5. Bluetooth Keyboard Text Input Pass-Through
+    // 5. Bluetooth Keyboard Handling & Toolbar Typing Fallback
     window.addEventListener('keydown', function(event) {
         const activeEl = document.activeElement;
         const isTextField = activeEl && (
@@ -145,8 +145,26 @@
             activeEl.isContentEditable
         );
 
+        // If a webpage text field is active, type there natively
         if (isTextField) {
             event.stopPropagation();
+            return;
+        }
+
+        // Otherwise, route typing from the Bluetooth keyboard straight to the native TV toolbar (`etUrlBar`)
+        if (window.nativeBridge && typeof window.nativeBridge.onKeyboardInput === 'function') {
+            if (event.key === 'Backspace') {
+                window.nativeBridge.onKeyboardInput('', true);
+                event.preventDefault();
+            } else if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+                window.nativeBridge.onKeyboardInput(event.key, false);
+                event.preventDefault();
+            } else if (event.key === 'Enter') {
+                if (typeof window.nativeBridge.submitToolbar === 'function') {
+                    window.nativeBridge.submitToolbar();
+                }
+                event.preventDefault();
+            }
         }
     }, true);
 
