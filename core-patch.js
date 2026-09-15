@@ -71,7 +71,8 @@
         const isTextField = activeEl && (
             activeEl.tagName === 'INPUT' || 
             activeEl.tagName === 'TEXTAREA' || 
-            activeEl.isContentEditable
+            activeEl.isContentEditable ||
+            activeEl.getAttribute('role') === 'textbox'
         );
 
         if (!isTextField) {
@@ -95,7 +96,7 @@
         }
     };
 
-    // 4. Enhanced Click Simulation & Focus Locking for SPAs (Facebook, etc.)
+    // 4. Enhanced Click Simulation with Deep Input Traversal for SPAs (Facebook, etc.)
     window.clickCursor = function() {
         if (!window.isCursorActive) return;
 
@@ -106,7 +107,7 @@
 
         const target = document.elementFromPoint(cursorX, cursorY);
         if (target) {
-            // Dispatch Pointer Events and Mouse Events so React/Vue frameworks recognize the interaction
+            // Dispatch standard interaction events
             ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(eventType => {
                 const event = new MouseEvent(eventType, {
                     view: window,
@@ -119,20 +120,22 @@
                 target.dispatchEvent(event);
             });
 
-            // Target input field logic with focus locking
-            const isInputTarget = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+            // Find actual input element whether clicked directly or via a parent container wrapper
+            const inputTarget = target.matches('input, textarea, [contenteditable="true"], [role="textbox"]') 
+                ? target 
+                : target.querySelector('input, textarea, [contenteditable="true"], [role="textbox"]') 
+                || target.closest('input, textarea, [contenteditable="true"], [role="textbox"]');
 
-            if (isInputTarget) {
-                // Force focus and schedule a secondary reinforcement check for React re-renders
-                target.focus();
+            if (inputTarget) {
+                inputTarget.focus();
                 setTimeout(() => {
-                    target.focus();
-                    if (typeof target.select === 'function' && (/^(text|search|url|tel|password|email)$/i.test(target.type) || !target.type)) {
-                        target.select();
+                    inputTarget.focus();
+                    if (typeof inputTarget.select === 'function' && (/^(text|search|url|tel|password|email)$/i.test(inputTarget.type) || !inputTarget.type)) {
+                        inputTarget.select();
                     }
                 }, 50);
 
-                // Shift native Android focus into the WebView so hardware keyboard types into the page
+                // Shift native Android focus into WebView
                 if (window.nativeBridge && typeof window.nativeBridge.requestWebViewFocus === 'function') {
                     window.nativeBridge.requestWebViewFocus();
                 }
@@ -151,7 +154,7 @@
     // Catch automatic/tab-based webpage text field focus changes
     document.addEventListener('focusin', function(event) {
         const target = event.target;
-        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable || target.getAttribute('role') === 'textbox')) {
             if (window.nativeBridge && typeof window.nativeBridge.requestWebViewFocus === 'function') {
                 window.nativeBridge.requestWebViewFocus();
             }
@@ -164,7 +167,8 @@
         const isTextField = activeEl && (
             activeEl.tagName === 'INPUT' || 
             activeEl.tagName === 'TEXTAREA' || 
-            activeEl.isContentEditable
+            activeEl.isContentEditable ||
+            activeEl.getAttribute('role') === 'textbox'
         );
 
         // IF A WEB TEXT FIELD IS FOCUSED: Allow typing directly into the web field
