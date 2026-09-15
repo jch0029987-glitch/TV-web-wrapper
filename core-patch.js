@@ -60,7 +60,7 @@
         if (axis === 'y' && motionIntervalY) { clearInterval(motionIntervalY); motionIntervalY = null; }
     };
 
-    // 3. Iframe-Aware & Desktop-Clean Click-to-Activate Logic
+    // 3. Iframe-Aware & Mobile-Optimized Click-to-Activate Logic
     window.clickCursor = function() {
         if (!window.isCursorActive) return;
 
@@ -73,7 +73,7 @@
             let cx = cursorX;
             let cy = cursorY;
 
-            // Handle security iframes (like reCAPTCHA)
+            // Handle security iframes (like reCAPTCHA or auth challenges)
             if (target.tagName === 'IFRAME') {
                 try {
                     const rect = target.getBoundingClientRect();
@@ -97,19 +97,36 @@
                 if (inputTarget) actualTarget = inputTarget;
             }
 
-            // Dispatch ONLY clean MouseEvents to match desktop mode and avoid SPA session wipes
-            ['mousedown', 'mouseup', 'click'].forEach(eventType => {
-                const ev = new MouseEvent(eventType, {
-                    bubbles: true,
-                    cancelable: true,
-                    view: window,
-                    clientX: cx,
-                    clientY: cy,
-                    screenX: cx,
-                    screenY: cy,
-                    button: 0,
-                    buttons: eventType === 'mouseup' ? 0 : 1
-                });
+            // Dispatch authentic Touch and Mouse events for mobile web app compatibility
+            const touchObj = new Touch({
+                identifier: Date.now(), 
+                target: actualTarget,
+                clientX: cx, 
+                clientY: cy, 
+                screenX: cx, 
+                screenY: cy,
+                pageX: cx + window.pageXOffset, 
+                pageY: cy + window.pageYOffset
+            });
+
+            ['touchstart', 'touchend', 'click'].forEach(eventType => {
+                const ev = eventType.startsWith('touch') 
+                    ? new TouchEvent(eventType, { 
+                        bubbles: true, 
+                        cancelable: true, 
+                        view: window, 
+                        touches: [touchObj], 
+                        targetTouches: [touchObj], 
+                        changedTouches: [touchObj] 
+                    })
+                    : new MouseEvent(eventType, { 
+                        bubbles: true, 
+                        cancelable: true, 
+                        view: window, 
+                        clientX: cx, 
+                        clientY: cy, 
+                        button: 0 
+                    });
                 actualTarget.dispatchEvent(ev);
             });
 
