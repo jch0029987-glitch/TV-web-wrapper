@@ -60,7 +60,7 @@
         if (axis === 'y' && motionIntervalY) { clearInterval(motionIntervalY); motionIntervalY = null; }
     };
 
-    // 3. Iframe-Aware & Sticky Input Click-to-Activate Logic
+    // 3. Iframe-Aware & Desktop-Clean Click-to-Activate Logic
     window.clickCursor = function() {
         if (!window.isCursorActive) return;
 
@@ -97,17 +97,19 @@
                 if (inputTarget) actualTarget = inputTarget;
             }
 
-            // Dispatch touch and mouse events for framework compatibility
-            const touchObj = new Touch({
-                identifier: Date.now(), target: actualTarget,
-                clientX: cx, clientY: cy, screenX: cx, screenY: cy,
-                pageX: cx + window.pageXOffset, pageY: cy + window.pageYOffset
-            });
-
-            ['touchstart', 'touchend', 'mousedown', 'mouseup', 'click'].forEach(eventType => {
-                const ev = eventType.startsWith('touch') 
-                    ? new TouchEvent(eventType, { bubbles: true, cancelable: true, view: window, touches: [touchObj], targetTouches: [touchObj], changedTouches: [touchObj] })
-                    : new MouseEvent(eventType, { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy, button: 0 });
+            // Dispatch ONLY clean MouseEvents to match desktop mode and avoid SPA session wipes
+            ['mousedown', 'mouseup', 'click'].forEach(eventType => {
+                const ev = new MouseEvent(eventType, {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    clientX: cx,
+                    clientY: cy,
+                    screenX: cx,
+                    screenY: cy,
+                    button: 0,
+                    buttons: eventType === 'mouseup' ? 0 : 1
+                });
                 actualTarget.dispatchEvent(ev);
             });
 
