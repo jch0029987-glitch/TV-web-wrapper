@@ -23,7 +23,7 @@
     cursor.style.zIndex = '999999';
     cursor.style.pointerEvents = 'none';
     cursor.style.transform = 'translate(-50%, -50%)';
-    cursor.style.display = 'none'; // Hidden by default until toggled ON
+    cursor.style.display = 'none';
     cursor.style.transition = 'background-color 0.1s ease';
 
     if (document.body) {
@@ -50,9 +50,9 @@
 
         const target = document.elementFromPoint(cursorX, cursorY);
         if (target) {
-            cursor.style.backgroundColor = 'rgba(0, 255, 0, 0.9)'; // Green when hovering an interactive element
+            cursor.style.backgroundColor = 'rgba(0, 255, 0, 0.9)';
         } else {
-            cursor.style.backgroundColor = 'rgba(255, 0, 0, 0.8)'; // Red otherwise
+            cursor.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
         }
     }
 
@@ -96,7 +96,7 @@
         }
     };
 
-    // 4. Click Simulation with Direct Input Targeting for React SPAs
+    // 4. Click Simulation for Login Inputs
     window.clickCursor = function() {
         if (!window.isCursorActive) return;
 
@@ -107,7 +107,6 @@
 
         const target = document.elementFromPoint(cursorX, cursorY);
         if (target) {
-            // Find underlying input element if clicked on a container wrapper
             const inputTarget = target.matches('input, textarea, [contenteditable="true"], [role="textbox"]') 
                 ? target 
                 : target.querySelector('input, textarea, [contenteditable="true"], [role="textbox"]') 
@@ -115,8 +114,34 @@
 
             const actualTarget = inputTarget || target;
 
-            // Dispatch pointer/mouse events directly on the actual input or target
-            ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(eventType => {
+            // Touch + Mouse event sequence to trigger React's event listeners
+            const touchObj = new Touch({
+                identifier: Date.now(),
+                target: actualTarget,
+                clientX: cursorX,
+                clientY: cursorY,
+                screenX: cursorX,
+                screenY: cursorY,
+                pageX: cursorX + window.pageXOffset,
+                pageY: cursorY + window.pageYOffset,
+                radiusX: 10,
+                radiusY: 10,
+                force: 1
+            });
+
+            ['touchstart', 'touchend'].forEach(eventType => {
+                const touchEvent = new TouchEvent(eventType, {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    touches: eventType === 'touchend' ? [] : [touchObj],
+                    targetTouches: eventType === 'touchend' ? [] : [touchObj],
+                    changedTouches: [touchObj]
+                });
+                actualTarget.dispatchEvent(touchEvent);
+            });
+
+            ['mousedown', 'mouseup', 'click'].forEach(eventType => {
                 const event = new MouseEvent(eventType, {
                     view: window,
                     bubbles: true,
@@ -130,9 +155,6 @@
 
             if (inputTarget) {
                 inputTarget.focus();
-                if (typeof inputTarget.click === 'function') {
-                    inputTarget.click();
-                }
                 setTimeout(() => {
                     inputTarget.focus();
                     if (typeof inputTarget.select === 'function' && (/^(text|search|url|tel|password|email)$/i.test(inputTarget.type) || !inputTarget.type)) {
@@ -166,7 +188,6 @@
 
     // 5. Intelligent Keyboard & Refresh Prevention Routing
     window.addEventListener('keydown', function(event) {
-        // Block accidental browser page refreshes (F5, Ctrl+R, Cmd+R)
         if (event.key === 'F5' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r')) {
             event.preventDefault();
             return;
@@ -180,12 +201,10 @@
             activeEl.getAttribute('role') === 'textbox'
         );
 
-        // IF A WEB TEXT FIELD IS FOCUSED: Allow typing directly into the web field
         if (isTextField) {
             return; 
         }
 
-        // FOR EVERYTHING ELSE: Route keystrokes to the native app toolbar (`etUrlBar`)
         if (window.nativeBridge && typeof window.nativeBridge.onKeyboardInput === 'function') {
             if (event.key === 'Backspace') {
                 window.nativeBridge.onKeyboardInput('', true);
