@@ -1,6 +1,7 @@
 package com.example.messengerwrapper
 
 import android.app.AlertDialog
+import android.content.Context
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
@@ -28,7 +29,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         
-        // 1. Global crash & exception interceptor for dashboard streaming
+        // 1. Global crash & exception interceptor
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             val stackTrace = throwable.stackTraceToString()
@@ -51,13 +52,12 @@ class MainActivity : ComponentActivity() {
             }
         )
 
-        // Attach WebView view into the XML FrameLayout container
         val webViewContainer = findViewById<FrameLayout>(R.id.webViewContainer)
         webViewContainer.addView(browserEngine.view)
 
-        // Bind XML UI elements
         etUrlBar = findViewById(R.id.etUrlBar)
         tvModeHud = findViewById(R.id.tvModeHud)
+        tvModeHud.text = "Mode: Scroll"
 
         val btnBack = findViewById<Button>(R.id.btnBack)
         val btnForward = findViewById<Button>(R.id.btnForward)
@@ -68,36 +68,15 @@ class MainActivity : ComponentActivity() {
         val btnSettings = findViewById<Button>(R.id.btnSettings)
         val btnCheckUpdate = findViewById<Button>(R.id.btnCheckUpdate)
 
-        // Button Click Listeners (Calling engine wrapper methods directly)
-        btnBack.setOnClickListener {
-            browserEngine.goBack()
-        }
-        btnForward.setOnClickListener {
-            browserEngine.goForward()
-        }
-        btnHome.setOnClickListener {
-            loadUrlAndSync("https://html.duckduckgo.com")
-        }
-        btnReload.setOnClickListener {
-            browserEngine.reload()
-        }
-        btnGo.setOnClickListener {
-            loadTypedUrl()
-        }
-        btnDesktop.setOnClickListener {
-            isDesktopMode = !isDesktopMode
-            browserEngine.setDesktopMode(isDesktopMode)
-            val modeText = if (isDesktopMode) "Desktop" else "Mobile"
-            Toast.makeText(this, "Switched to $modeText mode", Toast.LENGTH_SHORT).show()
-        }
-        btnSettings.setOnClickListener {
-            showSettingsDialog()
-        }
-        btnCheckUpdate.setOnClickListener {
-            checkForUpdates(manualCheck = true)
-        }
+        btnBack.setOnClickListener { browserEngine.goBack() }
+        btnForward.setOnClickListener { browserEngine.goForward() }
+        btnHome.setOnClickListener { loadUrlAndSync("https://html.duckduckgo.com") }
+        btnReload.setOnClickListener { browserEngine.reload() }
+        btnGo.setOnClickListener { loadTypedUrl() }
+        btnDesktop.setOnClickListener { toggleDesktopMode() }
+        btnSettings.setOnClickListener { showSettingsDialog() }
+        btnCheckUpdate.setOnClickListener { checkForUpdates(manualCheck = true) }
 
-        // URL EditText IME Action Listener
         etUrlBar.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
                 loadTypedUrl()
@@ -114,18 +93,10 @@ class MainActivity : ComponentActivity() {
                 runOnUiThread { loadUrlAndSync(url) }
             },
             onReloadExtensions = {
-                runOnUiThread {
-                    val cacheDir = filesDir
-                    cacheDir.listFiles()?.forEach { if (it.name.startsWith("cache_")) it.delete() }
-                    browserEngine.reload()
-                    Toast.makeText(this, "Remote: Extensions reloaded", Toast.LENGTH_SHORT).show()
-                }
+                runOnUiThread { reloadExtensions() }
             },
             onClearCache = {
-                runOnUiThread {
-                    browserEngine.clearCache()
-                    Toast.makeText(this, "Remote: Cache cleared", Toast.LENGTH_SHORT).show()
-                }
+                runOnUiThread { clearAppCache() }
             },
             getBlockedCount = {
                 browserEngine.blockedAdsCount
@@ -133,10 +104,7 @@ class MainActivity : ComponentActivity() {
         )
         debugServer.start()
 
-        // 4. Check for OTA Updates automatically on launch
         checkForUpdates(manualCheck = false)
-
-        // 5. Load initial homepage
         loadUrlAndSync("https://html.duckduckgo.com")
     }
 
@@ -153,6 +121,122 @@ class MainActivity : ComponentActivity() {
     private fun loadUrlAndSync(url: String) {
         etUrlBar.setText(url)
         browserEngine.loadUrl(url)
+    }
+
+    private fun toggleDesktopMode() {
+        isDesktopMode = !isDesktopMode
+        browserEngine.setDesktopMode(isDesktopMode)
+        val modeText = if (isDesktopMode) "Desktop" else "Mobile"
+        Toast.makeText(this, "Switched to $modeText mode", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun reloadExtensions() {
+        val cacheDir = filesDir
+        cacheDir.listFiles()?.forEach { if (it.name.startsWith("cache_")) it.delete() }
+        browserEngine.reload()
+        Toast.makeText(this, "Extensions reloaded", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun clearAppCache() {
+        browserEngine.clearCache()
+        Toast.makeText(this, "Cache Cleared", Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        val prefs = getSharedPreferences("CustomKeyMappings", Context.MODE_PRIVATE)
+        val customToggleKey = prefs.getInt("mouse_toggle_keycode", -1)
+
+        when (keyCode) {
+            KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS -> {
+                showSettingsDialog()
+                return true
+            }
+            // Multi-key remote fallbacks (Star button, Input icon, Mute, Info) ensure mouse mode is always accessible
+            KeyEvent.KEYCODE_STAR, 
+            KeyEvent.KEYCODE_TV_INPUT, 
+            KeyEvent.KEYCODE_MUTE, 
+            KeyEvent.KEYCODE_INFO,
+            customToggleKey -> {
+                isCursorActive = !isCursorActive
+                val status = if (isCursorActive) "ON" else "OFF"
+                tvModeHud.text = "Mode: " + if (isCursorActive) "Cursor" else "Scroll"
+                Toast.makeText(this, "Virtual Mouse: $status", Toast.LENGTH_SHORT).show()
+                browserEngine.evaluateJavascript("if(window.setCursorVisible) window.setCursorVisible($isCursorActive);", null)
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, 
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, 
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
+                if (isCursorActive) {
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
+                            browserEngine.evaluateJavascript("if(window.clickCursor) window.clickCursor();", null)
+                        }
+                        KeyEvent.KEYCODE_DPAD_UP -> {
+                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(0, -25); else window.tvScrollBy(0, -35);", null)
+                        }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(0, 25); else window.tvScrollBy(0, 35);", null)
+                        }
+                        KeyEvent.KEYCODE_DPAD_LEFT -> {
+                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(-25, 0); else window.tvScrollBy(-35, 0);", null)
+                        }
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(25, 0); else window.tvScrollBy(35, 0);", null)
+                        }
+                    }
+                    return true
+                }
+            }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    private fun showSettingsDialog() {
+        val options = arrayOf(
+            "View History", 
+            "Clear WebView Cache", 
+            "Reload Extensions Cache", 
+            "View Local Debug Logs",
+            "Map Mouse Toggle Button"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("Browser Settings")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> showHistoryDialog()
+                    1 -> clearAppCache()
+                    2 -> reloadExtensions()
+                    3 -> showDebugLogsDialog()
+                    4 -> showKeyMappingDialog()
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showKeyMappingDialog() {
+        val prefs = getSharedPreferences("CustomKeyMappings", Context.MODE_PRIVATE)
+        val currentKey = prefs.getInt("mouse_toggle_keycode", -1)
+        
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Map Mouse Toggle Button")
+            .setMessage("Current Mapped KeyCode: $currentKey\n\nPress any button on your remote now to assign it as the dedicated mouse toggle...")
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                if (keyCode != KeyEvent.KEYCODE_BACK && keyCode != KeyEvent.KEYCODE_HOME) {
+                    prefs.edit().putInt("mouse_toggle_keycode", keyCode).apply()
+                    Toast.makeText(this, "Mouse toggle mapped to KeyCode: $keyCode", Toast.LENGTH_SHORT).show()
+                    dialog.dismiss()
+                    return@setOnKeyListener true
+                }
+            }
+            false
+        }
+        dialog.show()
     }
 
     private fun checkForUpdates(manualCheck: Boolean) {
@@ -203,91 +287,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
-
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        when (keyCode) {
-            KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS -> {
-                showSettingsDialog()
-                return true
-            }
-            KeyEvent.KEYCODE_PROG_RED -> {
-                isCursorActive = !isCursorActive
-                val status = if (isCursorActive) "ON" else "OFF"
-                tvModeHud.text = "Mode: " + if (isCursorActive) "Cursor" else "Scroll"
-                Toast.makeText(this, "Virtual Mouse: $status", Toast.LENGTH_SHORT).show()
-                browserEngine.evaluateJavascript("if(window.setCursorVisible) window.setCursorVisible($isCursorActive);", null)
-                return true
-            }
-            KeyEvent.KEYCODE_PROG_GREEN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                Toast.makeText(this, "Custom Action Triggered", Toast.LENGTH_SHORT).show()
-                return true
-            }
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, 
-            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, 
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
-                if (isCursorActive) {
-                    when (keyCode) {
-                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
-                            browserEngine.evaluateJavascript("if(window.clickCursor) window.clickCursor();", null)
-                        }
-                        KeyEvent.KEYCODE_DPAD_UP -> {
-                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(0, -25); else window.tvScrollBy(0, -35);", null)
-                        }
-                        KeyEvent.KEYCODE_DPAD_DOWN -> {
-                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(0, 25); else window.tvScrollBy(0, 35);", null)
-                        }
-                        KeyEvent.KEYCODE_DPAD_LEFT -> {
-                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(-25, 0); else window.tvScrollBy(-35, 0);", null)
-                        }
-                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            browserEngine.evaluateJavascript("if(window.moveCursor) window.moveCursor(25, 0); else window.tvScrollBy(35, 0);", null)
-                        }
-                    }
-                    return true
-                }
-            }
-        }
-        return super.onKeyDown(keyCode, event)
-    }
-
-    private fun showSettingsDialog() {
-        val options = arrayOf(
-            "View History", 
-            "Clear WebView Cache", 
-            "Reload Extensions Cache", 
-            "View Local Debug Logs",
-            "Configure Custom Button Mapping"
-        )
-        AlertDialog.Builder(this)
-            .setTitle("Browser Settings")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> showHistoryDialog()
-                    1 -> {
-                        browserEngine.clearCache()
-                        Toast.makeText(this, "Cache Cleared", Toast.LENGTH_SHORT).show()
-                    }
-                    2 -> {
-                        val cacheDir = filesDir
-                        cacheDir.listFiles()?.forEach { if (it.name.startsWith("cache_")) it.delete() }
-                        browserEngine.reload()
-                        Toast.makeText(this, "Extensions reloaded", Toast.LENGTH_SHORT).show()
-                    }
-                    3 -> showDebugLogsDialog()
-                    4 -> showKeyMappingDialog()
-                }
-            }
-            .setNegativeButton("Close", null)
-            .show()
-    }
-
-    private fun showKeyMappingDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("Custom Button Mapping")
-            .setMessage("• Red Remote Button: Toggle Virtual Mouse / Scroll Mode\n• Green / Play-Pause: Custom Action Shortcut\n• Menu / Settings: Opens Settings Dialog\n• D-Pad (when mouse active): Steers Virtual Cursor")
-            .setPositiveButton("OK", null)
-            .show()
     }
 
     private fun showHistoryDialog() {
