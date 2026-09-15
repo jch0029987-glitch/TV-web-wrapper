@@ -11,9 +11,13 @@ console.log("TV Browser: mobile-enforcer.js loaded.");
         window.location.replace(href.replace('www.youtube.com', 'm.youtube.com'));
     }
     
-    // 2. Facebook & Messenger Web: Redirect desktop to m.facebook.com
+    // 2. Facebook & Messenger Web: Force m.facebook.com cleanly
     else if (host.includes('facebook.com') && !host.startsWith('m.') && !host.startsWith('touch.')) {
         console.log("TV Enforcer: Redirecting Facebook/Messages to mobile version.");
-        window.location.replace(href.replace('facebook.com', 'm.facebook.com'));
+        // Replace cleanly and ensure messages path is preserved
+        const mobileUrl = href.replace(/facebook\.com/, 'm.facebook.com');
+        if (window.location.href !== mobileUrl) {
+            window.location.replace(mobileUrl);
+        }
     }
 })();
