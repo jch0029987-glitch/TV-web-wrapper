@@ -136,4 +136,18 @@
         }
     };
 
+    // 5. Bluetooth Keyboard Text Input Pass-Through
+    window.addEventListener('keydown', function(event) {
+        const activeEl = document.activeElement;
+        const isTextField = activeEl && (
+            activeEl.tagName === 'INPUT' || 
+            activeEl.tagName === 'TEXTAREA' || 
+            activeEl.isContentEditable
+        );
+
+        if (isTextField) {
+            event.stopPropagation();
+        }
+    }, true);
+
 })();
