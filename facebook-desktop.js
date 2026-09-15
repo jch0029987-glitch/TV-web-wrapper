@@ -1,9 +1,10 @@
 (function() {
+    // Target strictly m.facebook.com and messenger.com domains
     if (!window.location.hostname.includes('facebook.com') && !window.location.hostname.includes('messenger.com')) return;
     if (window.__fbMobileSessionInjected) return;
     window.__fbMobileSessionInjected = true;
 
-    // Use a high-compatibility Mobile/Tablet UA that triggers standard verification challenges
+    // Use a high-compatibility Mobile Chrome UA to maintain valid session state
     const targetUA = 'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
     const targetPlatform = 'Linux armv8l';
 
@@ -21,10 +22,10 @@
     overrideProp(navigator, 'appVersion', targetUA.replace('Mozilla/', ''));
     overrideProp(navigator, 'platform', targetPlatform);
     overrideProp(navigator, 'vendor', 'Google Inc.');
-    overrideProp(navigator, 'maxTouchPoints', 5); // Re-enables touch support so verification buttons register natively
+    overrideProp(navigator, 'maxTouchPoints', 5);
     overrideProp(navigator, 'webdriver', false);
 
-    // Keep mobile viewport behavior intact for clear challenge prompt rendering
+    // Enforce mobile viewport scaling for crisp touch targets
     function enforceMobileViewport() {
         let viewport = document.querySelector('meta[name="viewport"]');
         if (!viewport) {
@@ -41,5 +42,10 @@
         enforceMobileViewport();
     }
 
-    console.log("Facebook Mobile-Auth Mode Initialized.");
+    // Automatically force root or home navigation directly into the mobile messages workspace
+    if (window.location.hostname.includes('facebook.com') && (window.location.pathname === '/' || window.location.pathname === '/home.php')) {
+        window.location.replace('https://m.facebook.com/messages');
+    }
+
+    console.log("Facebook m.mobile Messages Environment Initialized.");
 })();
