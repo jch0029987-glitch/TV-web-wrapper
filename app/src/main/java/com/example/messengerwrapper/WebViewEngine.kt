@@ -61,6 +61,13 @@ class WebViewEngine(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
+        
+        // CRITICAL: Ensure the WebView retains native window & touch focus 
+        // so JS web apps (like Facebook login) don't reject focus bindings.
+        isFocusable = true
+        isFocusableInTouchMode = true
+        requestFocus(View.FOCUS_DOWN)
+
         settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -119,7 +126,9 @@ class WebViewEngine(
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 
-                // Automatically record history using Room database
+                // Ensure focus is requested back upon page completion
+                view?.requestFocus()
+
                 if (url != null) {
                     val db = BrowserDatabase.getDatabase(context)
                     thread {
