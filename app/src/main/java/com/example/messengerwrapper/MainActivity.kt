@@ -158,6 +158,12 @@ class MainActivity : AppCompatActivity() {
             }
         )
         container.addView(engine.view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        
+        // Properly configure third-party cookies with the active WebView instance
+        if (engine.view is android.webkit.WebView) {
+            CookieManagerHelper.setupThirdPartyCookies(engine.view as android.webkit.WebView)
+        }
+
         return engine
     }
 
