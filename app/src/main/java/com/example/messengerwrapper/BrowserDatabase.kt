@@ -1,28 +1,40 @@
 package com.example.messengerwrapper
 
-import android.content.Context
-import androidx.room.Database
-import androidx.room.Room
-import androidx.room.RoomDatabase
+import android.webkit.CookieManager
+import android.webkit.WebView
 
-@Database(entities = [HistoryItem::class], version = 1, exportSchema = false)
-abstract class BrowserDatabase : RoomDatabase() {
-    abstract fun browserDao(): BrowserDao
+object CookieManagerHelper {
 
-    companion object {
-        @Volatile
-        private var INSTANCE: BrowserDatabase? = null
+    init {
+        // Global cookie acceptance doesn't require a WebView instance
+        CookieManager.getInstance().setAcceptCookie(true)
+    }
 
-        fun getDatabase(context: Context): BrowserDatabase {
-            return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    BrowserDatabase::class.java,
-                    "tv_browser_database"
-                ).build()
-                INSTANCE = instance
-                instance
-            }
+    // Call this once you have instantiated your WebView in MainActivity/Fragment
+    fun setupThirdPartyCookies(webView: WebView) {
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
+    }
+
+    fun syncCookies() {
+        CookieManager.getInstance().flush()
+    }
+
+    fun clearAllCookies(onCleared: () -> Unit = {}) {
+        CookieManager.getInstance().removeAllCookies {
+            CookieManager.getInstance().flush()
+            onCleared()
         }
+    }
+
+    fun getCookiesForUrl(url: String): String? {
+        return CookieManager.getInstance().getCookie(url)
+    }
+
+    fun setCookiesForUrl(url: String, cookieString: String) {
+        val cookieManager = CookieManager.getInstance()
+        for (cookie in cookieString.split(";")) {
+            cookieManager.setCookie(url, cookie.trim())
+        }
+        cookieManager.flush()
     }
 }
