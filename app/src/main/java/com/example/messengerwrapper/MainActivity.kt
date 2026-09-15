@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity() {
                 DebugConsoleStore.addLog("[AD-BLOCK] Blocked: $url")
             },
             onDownloadRequested = { url, _, _ ->
-                Toast.initSafe("Download triggered: $url", Toast.LENGTH_SHORT)
+                Toast.makeText(this, "Download triggered: $url", Toast.LENGTH_SHORT).show()
             }
         )
 
@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
         browserEngine.loadUrl("https://html.duckduckgo.com")
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Int {
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         when (keyCode) {
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS -> {
                 showSettingsDialog()
