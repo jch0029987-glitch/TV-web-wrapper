@@ -68,12 +68,12 @@ class MainActivity : ComponentActivity() {
         val btnSettings = findViewById<Button>(R.id.btnSettings)
         val btnCheckUpdate = findViewById<Button>(R.id.btnCheckUpdate)
 
-        // Button Click Listeners
+        // Button Click Listeners (Calling engine wrapper methods directly)
         btnBack.setOnClickListener {
-            if (browserEngine.canGoBack()) browserEngine.goBack()
+            browserEngine.goBack()
         }
         btnForward.setOnClickListener {
-            if (browserEngine.canGoForward()) browserEngine.goForward()
+            browserEngine.goForward()
         }
         btnHome.setOnClickListener {
             loadUrlAndSync("https://html.duckduckgo.com")
