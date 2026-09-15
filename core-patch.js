@@ -60,39 +60,60 @@
         if (axis === 'y' && motionIntervalY) { clearInterval(motionIntervalY); motionIntervalY = null; }
     };
 
-    // 3. Sticky Click-to-Activate Logic
+    // 3. Iframe-Aware & Sticky Input Click-to-Activate Logic
     window.clickCursor = function() {
         if (!window.isCursorActive) return;
 
         cursor.style.backgroundColor = 'rgba(255,255,255,1)';
         setTimeout(() => cursor.style.backgroundColor = 'rgba(255,0,0,0.8)', 150);
 
-        const target = document.elementFromPoint(cursorX, cursorY);
+        let target = document.elementFromPoint(cursorX, cursorY);
         if (target) {
-            const inputTarget = target.matches('input, textarea, [contenteditable="true"], [role="textbox"]') 
-                ? target 
-                : target.querySelector('input, textarea, [contenteditable="true"], [role="textbox"]') 
-                || target.closest('input, textarea, [contenteditable="true"], [role="textbox"]');
+            let actualTarget = target;
+            let cx = cursorX;
+            let cy = cursorY;
 
-            const actualTarget = inputTarget || target;
+            // Handle security iframes (like reCAPTCHA)
+            if (target.tagName === 'IFRAME') {
+                try {
+                    const rect = target.getBoundingClientRect();
+                    const frameDoc = target.contentDocument || target.contentWindow.document;
+                    const innerEl = frameDoc.elementFromPoint(cx - rect.left, cy - rect.top);
+                    if (innerEl) {
+                        actualTarget = innerEl;
+                    }
+                } catch (e) {
+                    // Cross-origin fallback: Target the iframe element directly and focus it
+                    actualTarget = target;
+                    if (typeof target.focus === 'function') {
+                        target.focus();
+                    }
+                }
+            } else {
+                const inputTarget = target.matches('input, textarea, [contenteditable="true"], [role="textbox"]') 
+                    ? target 
+                    : target.querySelector('input, textarea, [contenteditable="true"], [role="textbox"]') 
+                    || target.closest('input, textarea, [contenteditable="true"], [role="textbox"]');
+                if (inputTarget) actualTarget = inputTarget;
+            }
 
             // Dispatch touch and mouse events for framework compatibility
             const touchObj = new Touch({
                 identifier: Date.now(), target: actualTarget,
-                clientX: cursorX, clientY: cursorY, screenX: cursorX, screenY: cursorY,
-                pageX: cursorX + window.pageXOffset, pageY: cursorY + window.pageYOffset
+                clientX: cx, clientY: cy, screenX: cx, screenY: cy,
+                pageX: cx + window.pageXOffset, pageY: cy + window.pageYOffset
             });
 
             ['touchstart', 'touchend', 'mousedown', 'mouseup', 'click'].forEach(eventType => {
                 const ev = eventType.startsWith('touch') 
                     ? new TouchEvent(eventType, { bubbles: true, cancelable: true, view: window, touches: [touchObj], targetTouches: [touchObj], changedTouches: [touchObj] })
-                    : new MouseEvent(eventType, { bubbles: true, cancelable: true, view: window, clientX: cursorX, clientY: cursorY, button: 0 });
+                    : new MouseEvent(eventType, { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy, button: 0 });
                 actualTarget.dispatchEvent(ev);
             });
 
-            if (inputTarget) {
-                lockedInputTarget = inputTarget; // Permanently lock onto this input
-                inputTarget.focus();
+            if (actualTarget.matches('input, textarea, [contenteditable="true"], [role="textbox"]')) {
+                lockedInputTarget = actualTarget; // Permanently lock onto this input
+                actualTarget.focus();
                 
                 // Reinforce focus to counteract immediate React re-render drops
                 setTimeout(() => {
@@ -108,9 +129,9 @@
                     window.nativeBridge.requestWebViewFocus();
                 }
             } else {
-                // If clicking outside an input, release the lock
+                // If clicking outside an input or interacting with an iframe/button, release the lock
                 lockedInputTarget = null;
-                if (typeof target.focus === 'function') target.focus();
+                if (typeof actualTarget.focus === 'function') actualTarget.focus();
             }
         }
     };
