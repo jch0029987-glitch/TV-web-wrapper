@@ -95,7 +95,7 @@
         }
     };
 
-    // 4. Click Simulation & Smart Input Focusing
+    // 4. Click Simulation & Smart Focus Shifting
     window.clickCursor = function() {
         if (!window.isCursorActive) return;
 
@@ -118,8 +118,13 @@
                 target.dispatchEvent(event);
             });
 
-            // Explicitly focus text fields or interactive controls when clicked by cursor
-            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable || typeof target.focus === 'function') {
+            // If it's a text input element, focus it and pull native Android focus into the WebView
+            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+                target.focus();
+                if (window.nativeBridge && typeof window.nativeBridge.requestWebViewFocus === 'function') {
+                    window.nativeBridge.requestWebViewFocus();
+                }
+            } else if (typeof target.focus === 'function') {
                 target.focus();
             }
         }
@@ -131,6 +136,16 @@
         }
     };
 
+    // Also catch automatic/tab-based webpage text field focus changes
+    document.addEventListener('focusin', function(event) {
+        const target = event.target;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+            if (window.nativeBridge && typeof window.nativeBridge.requestWebViewFocus === 'function') {
+                window.nativeBridge.requestWebViewFocus();
+            }
+        }
+    }, true);
+
     // 5. Intelligent Keyboard Routing
     window.addEventListener('keydown', function(event) {
         const activeEl = document.activeElement;
@@ -140,7 +155,7 @@
             activeEl.isContentEditable
         );
 
-        // IF A WEB TEXT FIELD IS FOCUSED: Allow typing directly into the web field (do not intercept)
+        // IF A WEB TEXT FIELD IS FOCUSED: Allow typing directly into the web field
         if (isTextField) {
             return; 
         }
