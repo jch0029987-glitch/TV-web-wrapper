@@ -10,6 +10,11 @@
       "name": "Tablet Layout & Viewport Enforcer",
       "file": "tablet-patch.js",
       "match": "youtube.com|facebook.com"
+    },
+    {
+      "name": "Facebook Desktop Environment Spoofer",
+      "file": "facebook-desktop.js",
+      "match": "facebook.com"
     }
   ]
 }
